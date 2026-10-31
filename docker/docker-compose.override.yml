@@ -1,0 +1,27 @@
+# =====================================================================
+# ASIW: override untuk mengekspos telemetri XVWA ke host
+# ---------------------------------------------------------------------
+# Docker Compose otomatis MENGGABUNG berkas ini dengan docker-compose.yml
+# bila keduanya ada di direktori yang sama (/root/xvwa-lab/). Berkas asli
+# TIDAK diubah; entri volume di sini DITAMBAHKAN ke yang sudah ada.
+#
+# Yang ditambahkan:
+#   web: - keluarkan /var/log/apache2 (container) ke host  -> S1/S2/S3
+#        - suntik konfigurasi access log JSON ke conf-enabled -> S2
+#   db:  - keluarkan /var/log/mysql (container) ke host    -> S5
+#        - suntik konfigurasi server_audit                 -> S5
+#
+# Path host bersifat ABSOLUT agar tidak bergantung direktori kerja compose.
+# Skrip docker/asiw-setup-target-docker.sh membuat direktori & menyalin
+# berkas konfigurasi ke lokasi yang dirujuk di bawah.
+# =====================================================================
+services:
+  web:
+    volumes:
+      - /root/xvwa-lab/logs/apache:/var/log/apache2
+      - /root/xvwa-lab/asiw/apache/asiw-xvwa-json-log.conf:/etc/apache2/conf-enabled/asiw-xvwa-json-log.conf:ro
+
+  db:
+    volumes:
+      - /root/xvwa-lab/logs/mysql:/var/log/mysql
+      - /root/xvwa-lab/asiw/mysql/asiw-server-audit.cnf:/etc/mysql/conf.d/99-asiw-audit.cnf:ro

@@ -1,0 +1,28 @@
+# =====================================================================
+# ASIW S5 (varian Docker): MariaDB server_audit di dalam container
+# ---------------------------------------------------------------------
+# Disuntikkan ke container xvwa-db sebagai
+#   /etc/mysql/conf.d/99-asiw-audit.cnf
+# oleh docker-compose.override.yml.
+#
+# Perbedaan dari varian native: memakai plugin_load_add agar plugin
+# server_audit dimuat otomatis setiap container start (tidak perlu
+# INSTALL SONAME manual yang bisa hilang saat container dibuat ulang).
+#
+# Log ditulis ke /var/log/mysql/server_audit.log (di-mount ke host
+# /root/xvwa-lab/logs/mysql/server_audit.log, dibaca Wazuh Agent).
+#
+# server_audit_incl_users: XVWA pada lab ini terhubung sebagai 'root'
+# (MYSQL_ROOT_PASSWORD di compose). Bila kredensial aplikasi diganti ke
+# user khusus, sesuaikan daftar ini.
+# =====================================================================
+[mariadb]
+plugin_load_add         = server_audit
+server_audit_logging    = ON
+server_audit_events     = CONNECT,QUERY,TABLE
+server_audit_incl_users = root
+server_audit_output_type= FILE
+server_audit_file_path  = /var/log/mysql/server_audit.log
+server_audit_file_rotate_size = 104857600
+server_audit_file_rotations   = 5
+server_audit_query_log_limit  = 2048

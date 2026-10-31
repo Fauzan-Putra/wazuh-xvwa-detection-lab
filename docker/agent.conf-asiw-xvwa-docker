@@ -1,0 +1,123 @@
+<!--
+  ==================================================================
+  ASIW: Centralized agent.conf VARIAN DOCKER
+  ==================================================================
+  Dipasang di MANAGER:
+    /var/ossec/etc/shared/asiw-xvwa-targets/agent.conf
+
+  Pakai varian INI (bukan yang di manager/) bila XVWA berjalan via
+  Docker dengan bind mount host /root/xvwa-lab/xvwa -> container
+  /var/www/html/xvwa.
+
+  Perbedaan dari varian native:
+   - Log web dibaca dari /root/xvwa-lab/logs/apache/ (di-mount keluar
+     dari container oleh docker-compose.override.yml), bukan
+     /var/log/apache2/ host.
+   - FIM memantau /root/xvwa-lab/xvwa/ (path host dari bind mount),
+     bukan /var/www/html/xvwa/.
+   - Audit DB dibaca dari /root/xvwa-lab/logs/mysql/.
+   - auditd (S6) tetap dari /var/log/audit/audit.log host, karena
+     kernel host melihat syscall container.
+
+  CATATAN: rule di Manager TIDAK berubah. Rule FIM memakai pencocokan
+  substring '/xvwa/img/uploads/' yang tetap cocok pada path host
+  '/root/xvwa-lab/xvwa/img/uploads/...' (sudah diverifikasi).
+  ==================================================================
+-->
+<agent_config>
+
+  <labels>
+    <label key="app">xvwa</label>
+    <label key="deployment">docker</label>
+    <label key="detection_pack">asiw-xvwa-1.1</label>
+  </labels>
+
+  <!-- S1: access log combined (dipakai rule web bawaan Wazuh). -->
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/root/xvwa-lab/logs/apache/access.log</location>
+  </localfile>
+
+  <!-- S2: access log JSON XVWA. SUMBER UTAMA SELURUH RULE T1. -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/root/xvwa-lab/logs/apache/xvwa_access_json.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-xvwa-web: $(log)</out_format>
+  </localfile>
+
+  <!-- S3: error log Apache + PHP (prasyarat tier T2). -->
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/root/xvwa-lab/logs/apache/error.log</location>
+  </localfile>
+
+  <!-- S6: auditd host (bukti tier T3 untuk XV-03). Kernel host melihat
+       syscall container; tidak perlu di-mount. -->
+  <localfile>
+    <log_format>audit</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+
+  <!-- S8: hasil YARA via active response (rule 100427, 100447). -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/asiw-yara.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-yara: $(log)</out_format>
+  </localfile>
+
+  <!-- S5: audit MariaDB (bukti terkuat SQLi, rule 100401/100409).
+       Di-mount keluar dari container xvwa-db. -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/root/xvwa-lab/logs/mysql/server_audit.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-dbaudit: $(log)</out_format>
+  </localfile>
+
+  <!-- S4 (OPSIONAL): ModSecurity. Base image php:apache tidak memuat
+       ModSecurity. Untuk mengaktifkan, rebuild image xvwa-lab-web dengan
+       libapache2-mod-security2 lalu mount modsec_audit.json keluar.
+       Lihat docker/README-docker.md bagian ModSecurity. -->
+  <!--
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/root/xvwa-lab/logs/apache/modsec_audit.json</location>
+    <out_format>$(timestamp) $(hostname) asiw-modsec: $(log)</out_format>
+  </localfile>
+  -->
+
+  <!-- S7: FIM pada file XVWA di HOST (via bind mount).
+       Path host /root/xvwa-lab/xvwa = /var/www/html/xvwa di container.
+       File upload benar-benar ada di host, jadi FIM host bekerja penuh. -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>300</frequency>
+    <skip_nfs>yes</skip_nfs>
+
+    <directories whodata="yes" report_changes="yes" check_all="yes"
+                 tags="asiw_xvwa_upload">/root/xvwa-lab/xvwa/img/uploads</directories>
+
+    <directories whodata="yes" check_all="yes"
+                 tags="asiw_xvwa_img">/root/xvwa-lab/xvwa/img</directories>
+
+    <directories realtime="yes" check_all="yes"
+                 tags="asiw_xvwa_code">/root/xvwa-lab/xvwa/vulnerabilities</directories>
+
+    <directories realtime="yes" check_all="yes"
+                 tags="asiw_xvwa_code">/root/xvwa-lab/xvwa/setup</directories>
+
+    <ignore type="sregex">\.tmp$|\.swp$|~$</ignore>
+  </syscheck>
+
+  <!-- S9: SCA baseline. File XVWA ada di host via bind mount, jadi
+       policy varian Docker memeriksa /root/xvwa-lab/xvwa/. -->
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
+    <skip_nfs>yes</skip_nfs>
+    <policies>
+      <policy>etc/shared/asiw_xvwa_baseline.yml</policy>
+    </policies>
+  </sca>
+
+</agent_config>

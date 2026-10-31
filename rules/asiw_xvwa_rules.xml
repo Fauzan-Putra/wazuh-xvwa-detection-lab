@@ -417,8 +417,16 @@
   <rule id="100403" level="12">
     <if_sid>80700</if_sid>
     <field name="audit.key">^asiw_web_exec$</field>
-    <field name="audit.exe" type="pcre2">^(?!/usr/bin/ping$|/bin/ping$|/bin/sh$|/usr/bin/sh$|/bin/dash$|/usr/bin/dash$)</field>
-    <description>ASIW XV-03 T3: Web user executed non-baseline binary $(audit.exe) (confirmed command execution).</description>
+    <!-- Cocokkan pada COMMAND BASENAME (comm), bukan path exe penuh.
+         Alasan: bila XVWA berjalan di container, auditd host dapat
+         melaporkan audit.exe sebagai path overlay
+         (mis. /var/lib/docker/overlay2/.../usr/bin/ping), sehingga
+         allowlist berbasis path penuh akan meleset dan ping SAH dari
+         modul cmdi memicu alert. comm selalu "ping" terlepas dari overlay,
+         jadi robust untuk native maupun Docker.
+         Baseline sah modul cmdi = ping + shell perantara (sh/dash). -->
+    <field name="audit.command" type="pcre2">^(?!ping$|sh$|dash$)\S+$</field>
+    <description>ASIW XV-03 T3: Web user executed non-baseline command '$(audit.command)' (confirmed command execution).</description>
     <mitre><id>T1059.004</id></mitre>
     <group>host,command_execution,asiw_t3,</group>
   </rule>
@@ -426,10 +434,9 @@
   <!-- XV-03 T3b: shell interaktif / tool reverse shell oleh user web.
        Lebih tinggi dari 100403 karena pola khas post-exploitation. -->
   <rule id="100423" level="13">
-    <if_sid>80700</if_sid>
-    <field name="audit.key">^asiw_web_exec$</field>
-    <field name="audit.exe" type="pcre2">(?i)/(nc|ncat|netcat|socat|bash|zsh|ksh|python3?|perl|ruby|php|wget|curl)$</field>
-    <description>ASIW XV-03 T3: Web user spawned interpreter or network tool $(audit.exe) (likely reverse shell or payload download).</description>
+    <if_sid>100403</if_sid>
+    <field name="audit.command" type="pcre2">(?i)^(nc|ncat|netcat|socat|bash|zsh|ksh|python3?|perl|ruby|php|wget|curl)$</field>
+    <description>ASIW XV-03 T3: Web user spawned interpreter or network tool '$(audit.command)' (likely reverse shell or payload download).</description>
     <mitre><id>T1059.004</id><id>T1105</id></mitre>
     <group>host,command_execution,asiw_t3,</group>
   </rule>

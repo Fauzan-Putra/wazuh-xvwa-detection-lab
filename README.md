@@ -296,6 +296,11 @@ wazuh-xvwa-detection/
 │   ├── run_yara_tests.sh             # harness YARA
 │   ├── corpus_positive.tsv           # 58 serangan yang HARUS terdeteksi
 │   └── corpus_negative.tsv           # 42 trafik sah yang TIDAK boleh beralarm
+├── docker/                           # bila XVWA dijalankan via Docker
+│   ├── README-docker.md              #   -> panduan khusus Docker
+│   ├── asiw-setup-target-docker.sh   #   -> wiring host + container
+│   ├── docker-compose.override.yml   #   -> keluarkan log container ke host
+│   └── agent.conf-asiw-xvwa-docker   #   -> agent.conf path host
 └── docs/
     ├── rule-reference.md             # tabel rule.id -> tier -> kategori
     ├── xvwa-module-inventory.md      # parameter & metode tiap modul (dari source)

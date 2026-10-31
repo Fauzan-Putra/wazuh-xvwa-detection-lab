@@ -38,6 +38,19 @@ fi
 GROUP="${ASIW_GROUP:-asiw-xvwa-targets}"
 AGENTS="${ASIW_AGENT_IDS:-001 002 003}"
 MONITOR_IP="${ASIW_MONITOR_IP:-}"
+
+# Tipe deployment XVWA: "native" (Apache di host) atau "docker".
+# Menentukan agent.conf dan policy SCA mana yang didorong ke agent.
+DEPLOY="${ASIW_DEPLOYMENT:-native}"
+case "$DEPLOY" in
+  native)
+    AGENT_CONF="$SRC/manager/agent.conf-asiw-xvwa"
+    SCA_FILE="$SRC/agent/sca/asiw_xvwa_baseline.yml" ;;
+  docker)
+    AGENT_CONF="$SRC/docker/agent.conf-asiw-xvwa-docker"
+    SCA_FILE="$SRC/docker/asiw_xvwa_baseline-docker.yml" ;;
+  *) echo "ASIW_DEPLOYMENT harus 'native' atau 'docker'"; exit 1 ;;
+esac
 # Nilai placeholder yang ada di berkas rule ter-commit
 PLACEHOLDER_IP="192.0.2.148"
 
@@ -101,7 +114,7 @@ fi
 mkdir -p "$OSSEC/etc/shared/$GROUP"
 
 # ---------------------------------------------------------------- 5
-blue "5/8 Memasang agent.conf terpusat dan berkas yang disinkronkan"
+blue "5/8 Memasang agent.conf terpusat (deployment: ${DEPLOY})"
 install -o wazuh -g wazuh -m 660 "$SRC/manager/agent.conf-asiw-xvwa" \
         "$OSSEC/etc/shared/$GROUP/agent.conf"
 # Berkas di direktori grup ikut disinkronkan ke etc/shared/ pada agent.
