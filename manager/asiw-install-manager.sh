@@ -204,7 +204,7 @@ blue "Verifikasi akhir"
 loaded="$(grep -c 'asiw' "$OSSEC/logs/ossec.log" 2>/dev/null || echo 0)"
 echo "  jumlah rule ASIW terpasang : $(grep -c '<rule id="100' "$OSSEC/etc/rules/asiw_xvwa_rules.xml")"
 echo "  anggota grup $GROUP        :"
-"$OSSEC/bin/agent_groups" -s -g "$GROUP" 2>/dev/null | sed 's/^/    /'
+"$OSSEC/bin/agent_groups" -l -g "$GROUP" 2>/dev/null | sed 's/^/    /'
 
 echo
 green "SELESAI. Sisi Manager siap."
