@@ -1,0 +1,182 @@
+<!--
+  ==================================================================
+  ASIW: potongan konfigurasi Wazuh Agent untuk VM TARGET (XVWA)
+  ==================================================================
+  Pasang di VM Target: gabungkan blok-blok di bawah ke dalam
+  /var/ossec/etc/ossec.conf (DI DALAM elemen <ossec_config>), lalu:
+      sudo systemctl restart wazuh-agent
+      sudo /var/ossec/bin/wazuh-logtest     (opsional, cek lokal)
+
+  Berlaku untuk: target1-user (192.0.2.124), target2-user
+  (192.0.2.143), target3-user (192.0.2.162).
+
+  ASUMSI YANG HARUS DIVERIFIKASI PER VM:
+   - Document root Apache = /var/www/html  -> XVWA di /var/www/html/xvwa
+     Cek: grep -r DocumentRoot /etc/apache2/sites-enabled/
+   - UID user web (www-data) = 33
+     Cek: id -u www-data
+  ==================================================================
+-->
+
+<ossec_config>
+
+  <!-- ================================================================
+       LABEL KONTEKS
+       Label ini sudah ada pada agent ASIW (hypervisor/role/project).
+       Ditampilkan di sini sebagai acuan; JANGAN duplikasi bila sudah ada.
+       Tambahan 'app' membantu layer normalisasi memisahkan alert XVWA.
+       ================================================================ -->
+  <labels>
+    <label key="app">xvwa</label>
+    <label key="webroot">/var/www/html/xvwa</label>
+  </labels>
+
+  <!-- ================================================================
+       S1: access log Apache format combined (BIARKAN tetap ada).
+       Dipakai rule web bawaan Wazuh 31100-31171. Jangan diubah.
+       ================================================================ -->
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/apache2/access.log</location>
+  </localfile>
+
+  <!-- ================================================================
+       S2: access log JSON tambahan khusus XVWA.
+       <out_format> menyisipkan program name 'asiw-xvwa-web' sehingga
+       decoder kustom 'asiw-xvwa-webjson' dapat mengenalinya.
+
+       PENTING: tanpa <out_format>, baris JSON akan ditangkap decoder
+       'json' bawaan dan rule 100100 tidak akan pernah cocok.
+       Pola ini sudah diverifikasi dengan wazuh-logtest 4.14.8.
+       ================================================================ -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/apache2/xvwa_access_json.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-xvwa-web: $(log)</out_format>
+  </localfile>
+
+  <!-- ================================================================
+       S3: error log Apache + PHP (prasyarat tier T2).
+       Didekode decoder bawaan 'apache-errorlog' (group rule 30100).
+       ================================================================ -->
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/apache2/error.log</location>
+  </localfile>
+
+  <!-- ================================================================
+       S6: auditd (bukti host tier T3).
+       Wazuh tidak membaca audit.log secara default.
+       ================================================================ -->
+  <localfile>
+    <log_format>audit</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+
+  <!-- ================================================================
+       S4 (OPSIONAL): ModSecurity audit log JSON.
+       Menutup FN1 (body POST tidak terlihat di access log).
+       Aktifkan hanya bila ModSecurity dipasang (lihat agent/modsecurity/).
+       ================================================================ -->
+  <!--
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/apache2/modsec_audit.json</location>
+    <out_format>$(timestamp) $(hostname) asiw-modsec: $(log)</out_format>
+  </localfile>
+  -->
+
+  <!-- ================================================================
+       S5 (OPSIONAL): MariaDB server_audit.
+       Bukti terkuat untuk SQLi dan stored XSS (tier T3).
+       Aktifkan hanya bila plugin server_audit dipasang
+       (lihat agent/mariadb/).
+       ================================================================ -->
+  <!--
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/mysql/server_audit.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-dbaudit: $(log)</out_format>
+  </localfile>
+  -->
+
+  <!-- ================================================================
+       S7: FIM (syscheck) pada aplikasi XVWA.
+       PEMISAHAN YANG DISENGAJA (pengendali FP6 pada dokumen mapping):
+
+        a) Direktori UPLOAD  -> realtime, report_changes, alert tinggi.
+           File eksekutabel baru di sini adalah bukti T3 (rule 100407).
+
+        b) Direktori KODE    -> realtime tanpa report_changes.
+           Perubahan di sini wajar saat deploy/reset, jadi hanya
+           menghasilkan alert FIM bawaan level 7, bukan T3.
+
+        c) Direktori img/    -> dipantau karena SSRF menulis hasil
+           unduhan ke /xvwa/img/<rand>img1.jpg (rule 100410).
+
+       <whodata>yes</whodata> memerlukan auditd aktif dan memberi info
+       proses/user yang mengubah file. Jika auditd tidak dipakai,
+       ganti whodata="yes" menjadi realtime="yes".
+       ================================================================ -->
+  <syscheck>
+    <disabled>no</disabled>
+
+    <!-- (a) direktori upload: prioritas tertinggi -->
+    <directories whodata="yes" report_changes="yes" check_all="yes"
+                 tags="asiw_xvwa_upload">/var/www/html/xvwa/img/uploads</directories>
+
+    <!-- (c) direktori gambar: artefak SSRF -->
+    <directories whodata="yes" check_all="yes"
+                 tags="asiw_xvwa_img">/var/www/html/xvwa/img</directories>
+
+    <!-- (b) direktori kode aplikasi -->
+    <directories realtime="yes" check_all="yes"
+                 tags="asiw_xvwa_code">/var/www/html/xvwa/vulnerabilities</directories>
+    <directories realtime="yes" check_all="yes"
+                 tags="asiw_xvwa_code">/var/www/html/xvwa/setup</directories>
+
+    <!-- Abaikan file sementara dan cache yang berubah terus-menerus -->
+    <ignore type="sregex">\.tmp$|\.swp$|~$</ignore>
+
+    <!-- Hitung hash agar rule berbasis IOC hash (99901 bawaan) dan YARA
+         punya data yang cukup -->
+    <skip_nfs>yes</skip_nfs>
+    <frequency>300</frequency>
+  </syscheck>
+
+  <!-- ================================================================
+       S8: Active Response YARA, dipicu FIM pada direktori upload.
+       Konfirmasi ISI file (bukan hanya ekstensi), menutup kasus
+       double extension shell.php.jpg dan polyglot.
+       Prasyarat: agent/yara/asiw-yara.sh terpasang + aturan YARA.
+       ================================================================ -->
+  <!--
+  <command>
+    <name>asiw-yara</name>
+    <executable>asiw-yara.sh</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+
+  <active-response>
+    <command>asiw-yara</command>
+    <location>local</location>
+    <rules_id>100407,554</rules_id>
+  </active-response>
+  -->
+
+  <!-- ================================================================
+       S9 (OPSIONAL): SCA kustom untuk baseline konfigurasi XVWA.
+       Mengukur KONDISI rentan (statis), bukan peristiwa serangan.
+       ================================================================ -->
+  <!--
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
+    <policies>
+      <policy>/var/ossec/etc/shared/asiw_xvwa_baseline.yml</policy>
+    </policies>
+  </sca>
+  -->
+
+</ossec_config>

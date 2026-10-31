@@ -1,0 +1,596 @@
+<!--
+  ==================================================================
+  ASIW: Custom rules deteksi serangan XVWA (VM Target)
+  Target versi: Wazuh 4.14.8
+  Pasang di Manager: /var/ossec/etc/rules/asiw_xvwa_rules.xml
+  Dokumen acuan: XVWA_Detection_Mapping_ASIW.md
+  ==================================================================
+
+  SKEMA ID (jangan diubah tanpa memperbarui dokumen mapping, Bagian 7.1):
+    100100-100199 : rule konteks/parent (S2 access JSON, S3 error app,
+                    S5 DB audit, S7b YARA)
+    1002NN        : T1 Attempt    - pola serangan pada request
+    1003NN        : T2 Probable   - T1 + indikator respons/error/perilaku
+    1004NN        : T3 Confirmed  - bukti host (execve, FIM, YARA, DB)
+    1005NN        : Korelasi lintas sumber
+    100900-100999 : Suppression/allowlist terdokumentasi
+
+  KONVENSI NN (perluasan dari dokumen mapping 7.1):
+    Dokumen mapping menetapkan NN = nomor XV-ID, yang hanya menampung
+    SATU rule per tier per XV-ID. Beberapa XV-ID membutuhkan lebih dari
+    satu rule pada tier yang sama (mis. XV-07 T3 perlu deteksi berbasis
+    ekstensi DAN berbasis isi/YARA). Karena itu NN diperluas:
+
+        NN = 01..19        -> rule KANONIK, NN = nomor XV-ID
+        NN = 20 + XV-ID    -> varian ke-2 dari XV-ID tersebut
+        NN = 40 + XV-ID    -> varian ke-3
+        NN = 60 + XV-ID    -> varian ke-4
+
+    Contoh: 100427 = tier T3 (digit 4), NN=27 = 20+07 -> varian ke-2
+    dari XV-07. Pemetaan tetap deterministik, dan tabel lookup pada
+    docs/rule-reference.md tetap menjadi acuan tunggal bagi backend.
+
+  PRINSIP DESAIN (mengikat, dari dokumen mapping):
+   1. HTTP 200 BUKAN bukti keberhasilan pada XVWA. Tidak ada rule T2 yang
+      memakai kode status sebagai indikator sukses (lihat mapping 1.3).
+   2. T1 selalu level 4-7 (MEDIUM) sehingga tidak memicu notifikasi darurat.
+   3. T2 level 8-10 (HIGH). T3 level >= 11 (CRITICAL, berbasis bukti host).
+   4. Semua pola T1 DIIKAT pada path modul XVWA (pengendali FP1), bukan
+      pola global.
+   5. Baseline statistik (ukuran/durasi vs baseline endpoint) dihitung di
+      layer normalisasi (n8n/backend), bukan di Wazuh (mapping 10.4).
+
+  CATATAN TEKNIS (hasil verifikasi wazuh-logtest 4.14.8):
+   - Access log JSON didekode oleh 'asiw-xvwa-webjson'; JSON_Decoder memakai
+     NAMA FIELD ASLI dari JSON. Jadi rule memakai <field name="uri">,
+     <field name="status">, <field name="method">, bukan <url>/<id>/<protocol>.
+   - srcip dipetakan terpisah oleh decoder agar <same_source_ip/> berfungsi.
+   - Parent bawaan yang dipakai: 554 (FIM file added), 80700 (auditd),
+     5720 (sshd multiple auth failures), 5715 (sshd auth success),
+     30100 (apache errorlog).
+-->
+
+<group name="asiw,xvwa,">
+
+  <!-- ================================================================
+       1001xx : RULE KONTEKS (parent, level 0 / informasional)
+       ================================================================ -->
+
+  <!-- S2: seluruh baris access log JSON XVWA. -->
+  <rule id="100100" level="0">
+    <decoded_as>asiw-xvwa-webjson</decoded_as>
+    <description>ASIW: XVWA web access log (JSON) grouped.</description>
+  </rule>
+
+  <!-- Batasi ke aplikasi XVWA. Semua rule T1 turun dari sini. -->
+  <rule id="100101" level="0">
+    <if_sid>100100</if_sid>
+    <field name="uri">^/xvwa/</field>
+    <description>ASIW: XVWA application request grouped.</description>
+  </rule>
+
+  <!-- S3: error aplikasi (Apache/PHP error log).
+       TIDAK ada rule konteks terpisah di sini, dan itu disengaja.
+
+       Alasan (hasil uji wazuh-logtest 4.14.8): analysisd menelusuri pohon
+       rule dari induk ke anak dan memakai urutan pemuatan file, BUKAN
+       urutan level. Ruleset bawaan (ruleset/rules) dimuat sebelum ruleset
+       kustom (etc/rules), sehingga rule bawaan yang cocok lebih dulu akan
+       menang jika rule kustom hanya bersaudara dengannya.
+
+       Jalur rule yang benar-benar terjadi untuk error log XVWA:
+         PHP Fatal/SQL error : 30100 -> 30301
+         PHP Notice          : 30100 -> 30301 -> 30318
+         PHP Warning         : 30100 -> 30302
+
+       Karena itu rule T2 berbasis error log (100301/100306/100312) harus
+       menjadi ANAK dari ketiga rule tersebut: <if_sid>30301,30302,30318</if_sid>.
+       Dengan begitu rule kustom dievaluasi setelah rule bawaan cocok, dan
+       tidak perlu menaikkan level rule konteks (yang akan menimbulkan
+       derau pada error PHP rutin, mis. peringatan mcrypt modul crypto).
+  -->
+
+  <!-- S5: query yang diaudit pada database xvwa. -->
+  <rule id="100120" level="0">
+    <decoded_as>asiw-xvwa-dbaudit</decoded_as>
+    <field name="asiw_db_name">^xvwa$</field>
+    <description>ASIW ctx: DB audit event on xvwa database grouped.</description>
+  </rule>
+
+  <!-- S7b: hasil pemindaian YARA. -->
+  <rule id="100130" level="0">
+    <decoded_as>asiw-xvwa-yara</decoded_as>
+    <description>ASIW ctx: YARA scan result grouped.</description>
+  </rule>
+
+  <!-- S4: transaksi ModSecurity (menutup FN1: body POST tidak ada di access log). -->
+  <rule id="100140" level="0">
+    <decoded_as>asiw-xvwa-modsec</decoded_as>
+    <description>ASIW ctx: ModSecurity audit transaction grouped.</description>
+  </rule>
+
+  <!-- ================================================================
+       1002NN : T1 ATTEMPT (pola pada request)
+       ================================================================ -->
+
+  <!-- XV-01 SQL Injection error-based, modul sqli.
+       Parameter sah: item (digit), search (teks). Pola: kutip + operator SQL,
+       union select, information_schema, komentar SQL.
+       Catatan FN: form sqli memakai POST, jadi payload body hanya terlihat
+       lewat S4/S10. Rule ini menangkap varian GET / query string. -->
+  <rule id="100201" level="6">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/sqli/.*((%27|%2527|'|%22|%2522|")(%20|%2520|\+|\s|\))*(or|and|union|\|\|)|(?:\b|%[0-9a-f]{2})union(%20|%2520|\+|\s|/\*.*?\*/|%2F%2A.*?%2A%2F)+select|information_schema|(%2D%2D|--|%23|#|%2F%2A|/\*)|(?:\b|%[0-9a-f]{2})(sleep|benchmark|extractvalue|updatexml|load_file|group_concat|concat_ws)(%20|\s)*(%28|\())</field>
+    <description>ASIW XV-01 T1: SQL injection attempt on XVWA sqli module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,sql_injection,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-02 SQL Injection blind, modul sqli_blind.
+       Pola khas: time-based (sleep/benchmark/waitfor) atau boolean. -->
+  <rule id="100202" level="6">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/sqli_blind/.*((?:\b|%[0-9a-f]{2})(sleep|benchmark|pg_sleep)(%20|%2520|\s)*(%28|\()|waitfor(%20|%2520|\+|\s)+delay|(?:\b|%[0-9a-f]{2})(and|or)(%20|%2520|\+|\s)+\d+(%3D|=)\d+|(%27|%2527|'|%22|")(%20|%2520|\+|\s)*(and|or)|(?:\b|%[0-9a-f]{2})(ascii|substring|substr|mid|length|char_length|if|elt)(%20|\s)*(%28|\())</field>
+    <description>ASIW XV-02 T1: Blind SQL injection attempt on XVWA sqli_blind module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,sql_injection,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-03 OS Command Injection, modul cmdi (GET target).
+       Bentuk sah parameter target: IP/hostname. Pola: metacharacter shell.
+       Nama perintah SAJA tidak dipakai sebagai syarat tunggal supaya
+       hostname sah tidak memicu (pengendali FP1). -->
+  <rule id="100203" level="7">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/cmdi/.*(%3B|;|%7C|\||%26%26|\x26\x26|%60|`|%24%28|\$\(|%0A|%0D)</field>
+    <description>ASIW XV-03 T1: OS command injection attempt on XVWA cmdi module.</description>
+    <mitre><id>T1190</id><id>T1059.004</id></mitre>
+    <group>web_attack,command_injection,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-04 XPath Injection, modul xpath (POST search).
+       Pembeda dari SQLi: fungsi XPath. Path modul menentukan kelas primer
+       (mapping Bagian 6). -->
+  <rule id="100204" level="6">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/xpath/.*((%27|%2527|'|%22|%2522|")|(?:\b|%[0-9a-f]{2})(text|count|string-length|substring|name|position|local-name|concat)(%20|\s)*(%28|\()|(%2F%2F|//)|(%5D|\])(%20|\s)*(%7C|\|))</field>
+    <description>ASIW XV-04 T1: XPath injection attempt on XVWA xpath module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,xpath_injection,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-05 Formula (CSV) Injection, modul formula_injection.
+       Syarat: awalan formula PLUS fungsi/DDE (angka negatif tidak memicu,
+       pengendali FP pada mapping XV-05). -->
+  <rule id="100205" level="5">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/formula_injection/.*(%3Dcmd(%7C|\|)|%3DHYPERLINK%28|%3DIMPORTXML%28|%3DWEBSERVICE%28|%2BHYPERLINK%28|%40SUM%28)</field>
+    <description>ASIW XV-05 T1: Formula/CSV injection payload on XVWA formula_injection module.</description>
+    <mitre><id>T1204</id></mitre>
+    <group>web_attack,formula_injection,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-06 PHP Object Injection, modul php_object_injection (GET/REQUEST r).
+       Catatan: tombol UI sah mengirim a:2:{...}. Karena itu pola 'a:N:{'
+       SENDIRI tidak memicu; yang memicu adalah serialisasi OBJEK (O:N:")
+       atau properti gadget 'inject' (lihat source: class PHPObjectInjection
+       dengan $inject dan eval di __wakeup). -->
+  <rule id="100206" level="7">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/php_object_injection/\?.*r(%3D|=).*(O(%3A|:)\d+(%3A|:)(%22|")|(__wakeup|__destruct)|(?:\b|%[0-9a-f]{2})(system|passthru|shell_exec|exec|eval|popen|proc_open|file_put_contents)(%20|\s)*(%28|\()|inject(%22|"|%3B|;|%5C|\\))</field>
+    <description>ASIW XV-06 T1: PHP object injection attempt on XVWA php_object_injection module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,object_injection,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-07 Unrestricted File Upload, modul fileupload (POST multipart).
+       T1 lemah dan disengaja: isi file tidak terlihat di access log.
+       Bukti sesungguhnya ada di T3 (FIM/YARA). Level rendah supaya
+       upload gambar sah tidak membanjiri dashboard. -->
+  <rule id="100207" level="4">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/fileupload/</field>
+    <field name="method">^POST$</field>
+    <description>ASIW XV-07 T1: Upload submitted to XVWA fileupload module (content not visible in access log).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,file_upload,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-08 XSS Reflected, modul reflected_xss (GET item). -->
+  <rule id="100208" level="6">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/reflected_xss/.*((%3C|%253C|\x3c)(%2F|/)?(script|img|svg|iframe|body|object|embed|details|marquee|a(%20|\s))|(?:\b|%[0-9a-f]{2})on(error|load|mouseover|focus|click|toggle|animationstart|beforescriptexecute)(%3D|=|%253D)|javascript(%3A|:)|(?:\b|%[0-9a-f]{2})(alert|prompt|confirm|eval)(%20|\s)*(%28|\()|(%3C|\x3c)svg(%2F|/)on)</field>
+    <description>ASIW XV-08 T1: Reflected XSS attempt on XVWA reflected_xss module.</description>
+    <mitre><id>T1189</id><id>T1059.007</id></mitre>
+    <group>web_attack,xss,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-09 XSS Stored, modul stored_xss (POST name/msg).
+       Payload di body: tidak terlihat di access log (FN1). T1 hanya menandai
+       penulisan komentar; bukti payload ada di T3 (DB audit, rule 100409). -->
+  <rule id="100209" level="4">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/stored_xss/</field>
+    <field name="method">^POST$</field>
+    <description>ASIW XV-09 T1: Comment write to XVWA stored_xss module (payload in body; needs S4/S5/S10).</description>
+    <mitre><id>T1059.007</id></mitre>
+    <group>web_attack,xss,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-10 XSS DOM, modul dom_xss.
+       Source JS membaca 'default=' dari document.location.href. Bila payload
+       dikirim pada query string (bukan fragment), ia terlihat di log.
+       Bila memakai fragment '#', server TIDAK pernah melihatnya:
+       structural blind spot (mapping Bagian 8). -->
+  <rule id="100210" level="5">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/dom_xss/.*default(%3D|=).*((%3C|%253C|\x3c)(%2F|/)?(script|img|svg|iframe)|javascript(%3A|:)|(?:\b|%[0-9a-f]{2})on(error|load|mouseover)(%3D|=))</field>
+    <description>ASIW XV-10 T1: DOM XSS payload via query string on XVWA dom_xss module (fragment-based variant is undetectable).</description>
+    <mitre><id>T1059.007</id></mitre>
+    <group>web_attack,xss,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-11 SSRF/XSPA, modul ssrf_xspa (POST img_url).
+       Pola target internal/loopback/metadata/skema non-HTTP. -->
+  <rule id="100211" level="6">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/ssrf_xspa/.*(localhost|127(%2E|\.)0(%2E|\.)0(%2E|\.)1|0(%2E|\.)0(%2E|\.)0(%2E|\.)0|(%5B|\[)(%3A%3A|::)1(%5D|\])|169(%2E|\.)254(%2E|\.)169(%2E|\.)254|10(%2E|\.)\d{1,3}(%2E|\.)\d{1,3}(%2E|\.)\d{1,3}|192(%2E|\.)168(%2E|\.)|172(%2E|\.)(1[6-9]|2\d|3[01])(%2E|\.)|(file|gopher|dict|ldap|sftp|tftp|netdoc)(%3A|:)(%2F%2F|//))</field>
+    <description>ASIW XV-11 T1: SSRF/XSPA attempt toward internal or non-HTTP target on XVWA ssrf_xspa module.</description>
+    <mitre><id>T1190</id><id>T1046</id></mitre>
+    <group>web_attack,ssrf,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-12 File Inclusion LFI/RFI, modul fi (GET file).
+       Bentuk sah: readme.txt (satu-satunya yang ditautkan UI). -->
+  <rule id="100212" level="7">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/fi/.*file(%3D|=).*((%2E%2E|%252E%252E|\.\.)(%2F|%252F|/|%5C|\\)|\.\.\.\.(%2F|/){2}|(%2F|/)etc(%2F|/)(passwd|shadow|hosts)|(%2F|/)proc(%2F|/)self|(php|data|expect|zip|phar|glob|input)(%3A|:)(%2F%2F|//)|https?(%3A|:)(%2F%2F|//)|ftp(%3A|:)(%2F%2F|//)|%00|\x00)</field>
+    <description>ASIW XV-12 T1: File inclusion (LFI/RFI) attempt on XVWA fi module.</description>
+    <mitre><id>T1190</id><id>T1083</id></mitre>
+    <group>web_attack,lfi,rfi,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-14 IDOR, modul idor (GET item).
+       Satu akses TIDAK dialerting (itu perilaku sah). Hanya dipakai sebagai
+       parent untuk rule frekuensi T2 (enumerasi). level 0 = tidak ada alert. -->
+  <rule id="100114" level="0">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/idor/.*item(%3D|=)\d+</field>
+    <description>ASIW XV-14 ctx: Object access on XVWA idor module (single access is normal).</description>
+    <group>web_attack,idor,</group>
+  </rule>
+
+  <!-- XV-15 Missing Function-Level Access Control, modul missfunc.
+       Source: tombol 'delete' hanya disembunyikan di UI untuk non-admin,
+       server TIDAK memeriksa peran. Jadi action=delete adalah sinyal kuat. -->
+  <rule id="100215" level="7">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/missfunc/.*action(%3D|=)delete</field>
+    <description>ASIW XV-15 T1: Privileged action (delete) invoked on XVWA missfunc module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,access_control,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-16 CSRF, modul csrf (GET passwd/confirm/submit).
+       Keyakinan rendah secara desain: request CSRF terlihat identik dengan
+       request sah. Level 4 dan TIDAK boleh dinaikkan (mapping XV-16). -->
+  <rule id="100216" level="4">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/csrf/.*passwd(%3D|=).*submit(%3D|=)</field>
+    <description>ASIW XV-16 T1: Password change request on XVWA csrf module (low confidence; verify Referer/Origin).</description>
+    <group>web_attack,csrf,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-18 Unvalidated Redirects, modul redirect (GET forward).
+       Bentuk sah dari UI: forward=http://www.webappsec.org/
+       Rule 100901/100902 men-allowlist domain sah tersebut. -->
+  <rule id="100218" level="5">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/redirect/.*forward(%3D|=)(https?(%3A|:)(%2F%2F|//)|(%252F%252F|%2F%2F|//)|javascript(%3A|:)|data(%3A|:))</field>
+    <description>ASIW XV-18 T1: Unvalidated redirect to absolute URL on XVWA redirect module.</description>
+    <mitre><id>T1566.002</id></mitre>
+    <group>web_attack,open_redirect,asiw_t1,</group>
+  </rule>
+
+  <!-- XV-19 SSTI, modul ssti (GET name, engine Twig via Twig_Loader_String). -->
+  <rule id="100219" level="6">
+    <if_sid>100101</if_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/vulnerabilities/ssti/.*((%7B%7B|%257B%257B|\{\{)|(%7D%7D|\}\})|(%7B%25|\{%)|(%25%7D|%\})|(%24%7B|\$\{)|(%3C%25|\x3c%)|(_self|getFilter|registerUndefinedFilterCallback|getEnvironment|setEscaper)|\d(%2A|\*)\d)</field>
+    <description>ASIW XV-19 T1: Server-side template injection attempt on XVWA ssti module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,ssti,asiw_t1,</group>
+  </rule>
+
+  <!-- ================================================================
+       1003NN : T2 PROBABLE
+       Indikator INDEPENDEN dari kode status (mapping 1.3):
+       error aplikasi, atau pola perilaku (frekuensi).
+       ================================================================ -->
+
+  <!-- XV-01 T2: error SQL aplikasi muncul pada modul sqli.
+       Modul sqli memang mengaktifkan display_errors + mysqli_report(ERROR),
+       sehingga error SQL adalah indikator kuat payload mengubah sintaks query. -->
+  <rule id="100301" level="9">
+    <if_sid>30301,30302,30318</if_sid>
+    <regex type="pcre2">(SQL syntax|mysqli_sql_exception|mysqli::|SQLSTATE).*/xvwa/vulnerabilities/sqli(_blind)?/</regex>
+    <description>ASIW XV-01 T2: SQL error raised by XVWA sqli module (payload altered query syntax).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,sql_injection,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-02 T2: rentetan percobaan blind SQLi dari IP sama
+       (pola ekstraksi karakter demi karakter). -->
+  <rule id="100302" level="9" frequency="6" timeframe="60">
+    <if_matched_sid>100202</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW XV-02 T2: Repeated blind SQLi attempts from same source (data extraction pattern).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,sql_injection,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-06 T2: error unserialize/class pada modul php_object_injection. -->
+  <rule id="100306" level="9">
+    <if_sid>30301,30302,30318</if_sid>
+    <regex type="pcre2">unserialize.*/xvwa/vulnerabilities/php_object_injection/</regex>
+    <description>ASIW XV-06 T2: Deserialization error on XVWA php_object_injection module.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,object_injection,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-08 T2: banyak percobaan XSS reflected dari IP sama. -->
+  <rule id="100308" level="8" frequency="4" timeframe="60">
+    <if_matched_sid>100208</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW XV-08 T2: Multiple reflected XSS attempts from same source.</description>
+    <mitre><id>T1189</id></mitre>
+    <group>web_attack,xss,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-11 T2: banyak percobaan SSRF dari IP sama = pemindaian port
+       internal via server (XSPA). -->
+  <rule id="100311" level="9" frequency="5" timeframe="60">
+    <if_matched_sid>100211</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW XV-11 T2: Repeated SSRF requests from same source (internal port scanning via server).</description>
+    <mitre><id>T1046</id></mitre>
+    <group>web_attack,ssrf,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-12 T2: include gagal (failed to open stream) pada modul fi,
+       menunjukkan path yang benar-benar dicoba include oleh aplikasi. -->
+  <rule id="100312" level="9">
+    <if_sid>30301,30302,30318</if_sid>
+    <regex type="pcre2">(failed to open stream|include\(\)).*/xvwa/vulnerabilities/fi/</regex>
+    <description>ASIW XV-12 T2: Failed include on XVWA fi module (inclusion path reached the interpreter).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,lfi,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-12 T2b: enumerasi path (banyak percobaan LFI dari IP sama). -->
+  <rule id="100332" level="8" frequency="5" timeframe="60">
+    <if_matched_sid>100212</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW XV-12 T2: Multiple file inclusion attempts from same source (path enumeration).</description>
+    <mitre><id>T1083</id></mitre>
+    <group>web_attack,lfi,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-14 T2: enumerasi IDOR. Ambang 10/60s dipilih di atas perilaku
+       penelusuran daftar normal (UI idor hanya menampilkan 5 item). -->
+  <rule id="100314" level="8" frequency="10" timeframe="60">
+    <if_matched_sid>100114</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW XV-14 T2: IDOR enumeration pattern from same source (many object IDs in short window).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,idor,asiw_t2,</group>
+  </rule>
+
+  <!-- XV-19 T2: banyak percobaan SSTI dari IP sama. -->
+  <rule id="100319" level="8" frequency="4" timeframe="60">
+    <if_matched_sid>100219</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW XV-19 T2: Multiple SSTI attempts from same source.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>web_attack,ssti,asiw_t2,</group>
+  </rule>
+
+  <!-- ================================================================
+       1004NN : T3 CONFIRMED (bukti host)
+       ================================================================ -->
+
+  <!-- XV-01 T3: query berbahaya benar-benar dieksekusi pada DB xvwa.
+       Bukti terkuat untuk SQLi (mapping S5). -->
+  <rule id="100401" level="12">
+    <if_sid>100120</if_sid>
+    <field name="asiw_db_query" type="pcre2">(?i)(union(\s|/\*.*\*/)+select|information_schema|\bsleep\s*\(|\bbenchmark\s*\(|into\s+outfile|load_file\s*\(|\bor\s+1\s*=\s*1|\band\s+1\s*=\s*1)</field>
+    <description>ASIW XV-01 T3: Malicious SQL executed on xvwa database.</description>
+    <mitre><id>T1190</id></mitre>
+    <group>host,sql_injection,db,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-03 T3: user web mengeksekusi biner DI LUAR allowlist baseline.
+       Baseline sah modul cmdi dari source XVWA: shell_exec('ping -c 3 ...'),
+       jadi 'ping' dan shell perantara ('sh -c') adalah baseline (pengendali FP3).
+       auditd key 'asiw_web_exec' hanya memantau euid user web
+       (lihat agent/auditd/asiw-xvwa.rules).
+       VERIFIKASI path ping pada VM: `command -v ping`. -->
+  <rule id="100403" level="12">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^asiw_web_exec$</field>
+    <field name="audit.exe" type="pcre2">^(?!/usr/bin/ping$|/bin/ping$|/bin/sh$|/usr/bin/sh$|/bin/dash$|/usr/bin/dash$)</field>
+    <description>ASIW XV-03 T3: Web user executed non-baseline binary $(audit.exe) (confirmed command execution).</description>
+    <mitre><id>T1059.004</id></mitre>
+    <group>host,command_execution,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-03 T3b: shell interaktif / tool reverse shell oleh user web.
+       Lebih tinggi dari 100403 karena pola khas post-exploitation. -->
+  <rule id="100423" level="13">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^asiw_web_exec$</field>
+    <field name="audit.exe" type="pcre2">(?i)/(nc|ncat|netcat|socat|bash|zsh|ksh|python3?|perl|ruby|php|wget|curl)$</field>
+    <description>ASIW XV-03 T3: Web user spawned interpreter or network tool $(audit.exe) (likely reverse shell or payload download).</description>
+    <mitre><id>T1059.004</id><id>T1105</id></mitre>
+    <group>host,command_execution,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-07 T3: file dengan ekstensi eksekutabel PHP muncul di direktori
+       upload XVWA (/xvwa/img/uploads/). Mencakup double extension
+       (mis. shell.php.jpg TIDAK cocok di sini; ditangani 100408 lewat YARA). -->
+  <rule id="100407" level="12">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)/xvwa/img/uploads/.*\.(php|php3|php4|php5|php7|phtml|phar|pht|phps)$</field>
+    <description>ASIW XV-07 T3: Executable file added to XVWA upload directory: $(file).</description>
+    <mitre><id>T1505.003</id></mitre>
+    <group>host,web_shell,file_integrity,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-07 T3b: YARA mencocokkan konten berbahaya di direktori upload.
+       Menutup kasus double extension dan polyglot (ekstensi .jpg tetapi
+       isinya webshell) yang lolos dari 100407. -->
+  <rule id="100427" level="14">
+    <if_sid>100130</if_sid>
+    <field name="file" type="pcre2">(?i)/xvwa/img/uploads?/</field>
+    <field name="matches">\.+</field>
+    <description>ASIW XV-07 T3: YARA matched $(matches) on uploaded file $(file) (confirmed malicious content).</description>
+    <mitre><id>T1505.003</id></mitre>
+    <group>host,web_shell,yara,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-07 T3 varian ke-3: skrip Active Response YARA menolak nama berkas
+       karena memuat karakter kendali (newline/CR). Nama berkas sepenuhnya
+       dikendalikan penyerang pada XVWA (basename tanpa sanitasi), dan
+       newline dapat dipakai untuk menyuntikkan baris log palsu.
+       Penolakan itu sendiri adalah indikator serangan, jadi harus
+       menghasilkan alert, bukan hilang tanpa jejak. -->
+  <rule id="100447" level="12">
+    <if_sid>100130</if_sid>
+    <field name="matches">^ASIW_Suspicious_Filename$</field>
+    <description>ASIW XV-07 T3: Uploaded filename contained control characters (log-injection attempt); file not scanned.</description>
+    <mitre><id>T1505.003</id><id>T1070</id></mitre>
+    <group>host,web_shell,evasion,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-09 T3: payload XSS benar-benar tersimpan ke tabel comments.
+       Bukti penulisan (bukan pemuatan) sesuai catatan korelasi mapping XV-09. -->
+  <rule id="100409" level="11">
+    <if_sid>100120</if_sid>
+    <field name="asiw_db_cmd" type="pcre2">(?i)^query$</field>
+    <field name="asiw_db_query" type="pcre2">(?i)insert.+comments.+(\x3cscript|\x3cimg|\x3csvg|\x3ciframe|onerror|onload|javascript:)</field>
+    <description>ASIW XV-09 T3: XSS payload stored into comments table (persistent payload confirmed).</description>
+    <mitre><id>T1059.007</id></mitre>
+    <group>host,xss,db,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-11 T3: proses web membuka koneksi keluar.
+       auditd key 'asiw_web_connect' (syscall connect oleh euid user web). -->
+  <rule id="100411" level="11">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^asiw_web_connect$</field>
+    <description>ASIW XV-11 T3: Web process initiated an outbound connection (SSRF/RFI fetch or exfiltration).</description>
+    <mitre><id>T1046</id><id>T1041</id></mitre>
+    <group>host,ssrf,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-11 T3b: SSRF menulis hasil unduhan ke /xvwa/img/ (source:
+       file_put_contents("../../img/<rand>img1.jpg")). File baru di /xvwa/img/
+       yang BUKAN di uploads menandakan fetch SSRF berhasil. -->
+  <rule id="100431" level="11">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)/xvwa/img/\d+img1\.jpg$</field>
+    <description>ASIW XV-11 T3: SSRF fetch artifact written to XVWA image directory: $(file).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>host,ssrf,file_integrity,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-15 T3: baris DELETE pada tabel caffaine terbukti dieksekusi
+       (aksi privilese benar-benar terjadi, bukan hanya diminta). -->
+  <rule id="100415" level="11">
+    <if_sid>100120</if_sid>
+    <field name="asiw_db_query" type="pcre2">(?i)delete\s+from\s+caffaine</field>
+    <description>ASIW XV-15 T3: Privileged delete executed on caffaine table (access control bypass confirmed).</description>
+    <mitre><id>T1190</id></mitre>
+    <group>host,access_control,db,asiw_t3,</group>
+  </rule>
+
+  <!-- XV-16 T3: password user benar-benar berubah (UPDATE users set password).
+       Dipakai untuk mengonfirmasi CSRF berhasil. -->
+  <rule id="100416" level="11">
+    <if_sid>100120</if_sid>
+    <field name="asiw_db_query" type="pcre2">(?i)update\s+users\s+set\s+password</field>
+    <description>ASIW XV-16 T3: User password changed in xvwa database (confirm whether request was CSRF).</description>
+    <mitre><id>T1098</id></mitre>
+    <group>host,csrf,db,asiw_t3,</group>
+  </rule>
+
+  <!-- ================================================================
+       1005NN : KORELASI LINTAS SUMBER
+       ================================================================ -->
+
+  <!-- Webshell terunggah, lalu file itu diakses lewat web.
+       Dua sumber berbeda (FIM + access log) = keyakinan tertinggi. -->
+  <rule id="100507" level="14" timeframe="600">
+    <if_sid>100101</if_sid>
+    <if_matched_sid>100407</if_matched_sid>
+    <field name="uri" type="pcre2">(?i)^/xvwa/img/uploads/.*\.(php|php3|php4|php5|php7|phtml|phar|pht)</field>
+    <same_source_ip />
+    <description>ASIW CORR: Uploaded executable file accessed via web after upload (active web shell).</description>
+    <mitre><id>T1505.003</id></mitre>
+    <group>correlation,web_shell,asiw_t3,</group>
+  </rule>
+
+  <!-- Percobaan command injection (T1 web) diikuti bukti eksekusi di host. -->
+  <rule id="100503" level="14" timeframe="120">
+    <if_sid>100403</if_sid>
+    <if_matched_sid>100203</if_matched_sid>
+    <description>ASIW CORR: Command injection attempt on cmdi module followed by web-user process execution (exploit confirmed).</description>
+    <mitre><id>T1190</id><id>T1059.004</id></mitre>
+    <group>correlation,command_injection,asiw_t3,</group>
+  </rule>
+
+  <!-- SSH brute force diikuti login sukses dari IP yang sama.
+       Dipertahankan di sini karena ikut dipakai skenario E3 ASIW. -->
+  <rule id="100501" level="13" timeframe="300">
+    <if_sid>5715</if_sid>
+    <if_matched_sid>5720</if_matched_sid>
+    <same_source_ip />
+    <description>ASIW CORR: SSH login success after brute force from same source IP.</description>
+    <mitre><id>T1110</id><id>T1078</id></mitre>
+    <group>correlation,authentication_success,</group>
+  </rule>
+
+  <!-- ================================================================
+       1009xx : SUPPRESSION / ALLOWLIST
+       Setiap entri WAJIB mencantumkan alasan dan pemilik.
+       Catatan: JANGAN men-suppress host penyerang lab; beri tag lab_attacker
+       di layer normalisasi agar tetap tercatat (mapping 2.4).
+       ================================================================ -->
+
+  <!-- Alasan: health check berkala dari VM Monitoring ke halaman root XVWA.
+       Pemilik: tim ASIW. Cakupan sengaja dibatasi ke root path saja. -->
+  <rule id="100901" level="0">
+    <if_sid>100101</if_sid>
+    <srcip>192.0.2.148</srcip>
+    <field name="uri" type="pcre2">^/xvwa/?$</field>
+    <description>ASIW suppression: monitoring health check to XVWA root (owner: ASIW team).</description>
+  </rule>
+
+  <!-- Alasan: tautan sah pada UI modul redirect menuju domain konsorsium
+       keamanan (lihat source redirect/home.php). Pemilik: tim ASIW. -->
+  <rule id="100902" level="0">
+    <if_sid>100218</if_sid>
+    <field name="uri" type="pcre2">(?i)forward(%3D|=)(http%3A%2F%2F|http://)www(%2E|\.)webappsec(%2E|\.)org(%2F|/)?$</field>
+    <description>ASIW suppression: legitimate redirect target shipped with XVWA UI (owner: ASIW team).</description>
+  </rule>
+
+  <!-- Alasan: setup/reset XVWA (/xvwa/setup/?action=do) menghapus dan membuat
+       ulang tabel serta mengosongkan img/uploads. Tanpa pengecualian ini,
+       setiap reset lab memicu T3 palsu (DROP/CREATE/DELETE + FIM deleted).
+       Pemilik: tim ASIW. Hanya menurunkan level, event tetap tersimpan. -->
+  <rule id="100903" level="3">
+    <if_sid>100120</if_sid>
+    <field name="asiw_db_query" type="pcre2">(?i)(drop\s+table\s+(comments|caffaine|users)|create\s+table\s+(comments|caffaine|users))</field>
+    <description>ASIW suppression: XVWA setup/reset DDL on lab tables (owner: ASIW team; expected during lab reset).</description>
+  </rule>
+
+</group>

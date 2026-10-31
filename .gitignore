@@ -1,0 +1,44 @@
+# =====================================================================
+# Nilai spesifik infrastruktur: JANGAN PERNAH di-commit
+# PRD ASIW Bagian 12: "Tidak ada IP internal ke layanan eksternal
+# tanpa masking." Repositori public adalah layanan eksternal.
+# =====================================================================
+asiw.env
+asiw.env.local
+*.env
+!asiw.env.example
+
+# Kredensial dan kunci
+*.key
+*.pem
+*.p12
+*.pfx
+client.keys
+credentials*
+secrets*
+*_rsa
+*_ed25519
+
+# Laporan verifikasi dari VM (memuat hostname dan path nyata)
+asiw-target-verification-*.txt
+*-verification-*.txt
+
+# Log dan data runtime
+*.log
+alerts.json
+archives.json
+
+# Backup
+*.bak
+*.bak-*
+*.orig
+*~
+*.swp
+
+# Artefak OS dan editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+__pycache__/
+*.pyc

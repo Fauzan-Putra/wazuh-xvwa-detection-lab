@@ -1,0 +1,187 @@
+<!--
+  ==================================================================
+  ASIW: Centralized agent configuration untuk grup "asiw-xvwa-targets"
+  ==================================================================
+  Berlaku untuk seluruh VM Target dalam grup sekaligus. Pada lab ASIW
+  ada tiga (dua di VMware ESXi, satu di Microsoft Hyper-V). IP dan
+  hostname nyata TIDAK dicantumkan di sini; lihat asiw.env (tidak
+  di-commit) sesuai PRD Bagian 12 tentang privasi data internal.
+
+  Dipasang di MANAGER:
+    /var/ossec/etc/shared/asiw-xvwa-targets/agent.conf
+
+  Manager mendorong berkas ini ke seluruh agent dalam grup secara
+  otomatis (setiap ~10 menit, atau segera setelah agent restart).
+  Agent TIDAK perlu diedit manual.
+
+  MENGAPA DIPUSATKAN, bukan edit ossec.conf per VM:
+  Ketiga VM Target harus memiliki konfigurasi telemetri yang IDENTIK,
+  karena eksperimen ASIW membandingkan perilaku antar-hypervisor
+  (PRD Bagian 10). Selisih konfigurasi sekecil apa pun akan mencemari
+  perbandingan itu. Konfigurasi terpusat menghilangkan risiko tersebut
+  dan sekaligus memenuhi kebutuhan reproducibility (PRD Bagian 12).
+
+  VERIFIKASI setelah dipasang (jalankan di Manager):
+    /var/ossec/bin/verify-agent-conf -f /var/ossec/etc/shared/asiw-xvwa-targets/agent.conf
+  Dan dari sisi agent:
+    /var/ossec/bin/wazuh-control info
+    grep "Assigned group" /var/ossec/logs/ossec.log | tail -1
+  ==================================================================
+-->
+<agent_config>
+
+  <!-- ================================================================
+       LABEL KONTEKS
+       Label hypervisor/role/project sudah ada di ossec.conf lokal tiap
+       agent (selesai per dokumen konsep 9 Okt 2026) dan TIDAK boleh
+       diduplikasi di sini. Dua label di bawah bersifat tambahan dan
+       sama untuk ketiga VM, jadi aman dipusatkan.
+       ================================================================ -->
+  <labels>
+    <label key="app">xvwa</label>
+    <label key="detection_pack">asiw-xvwa-1.1</label>
+  </labels>
+
+  <!-- ================================================================
+       S1: access log Apache format combined.
+       Dipakai rule web bawaan Wazuh (31100-31171). Jangan dihapus:
+       ruleset ASIW melengkapi, bukan mengganti, rule bawaan.
+       ================================================================ -->
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/apache2/access.log</location>
+  </localfile>
+
+  <!-- ================================================================
+       S2: access log JSON khusus XVWA. SUMBER UTAMA SELURUH RULE T1.
+       out_format menyisipkan program name "asiw-xvwa-web" supaya
+       decoder kustom asiw-xvwa-webjson mengenalinya. Tanpa out_format,
+       baris JSON akan ditangkap decoder 'json' bawaan dan rule 100100
+       tidak akan pernah cocok (sudah diverifikasi dengan wazuh-logtest).
+       ================================================================ -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/apache2/xvwa_access_json.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-xvwa-web: $(log)</out_format>
+  </localfile>
+
+  <!-- ================================================================
+       S3: error log Apache + PHP. Prasyarat tier T2
+       (rule 100301, 100306, 100312).
+       ================================================================ -->
+  <localfile>
+    <log_format>apache</log_format>
+    <location>/var/log/apache2/error.log</location>
+  </localfile>
+
+  <!-- ================================================================
+       S6: auditd. Prasyarat tier T3 untuk XV-03, XV-11, XV-12
+       (rule 100403, 100423, 100411).
+       Wazuh tidak membaca audit.log secara default.
+       ================================================================ -->
+  <localfile>
+    <log_format>audit</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+
+  <!-- ================================================================
+       S8: hasil pemindaian YARA dari Active Response.
+       Prasyarat rule 100427 dan 100447.
+       ================================================================ -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/asiw-yara.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-yara: $(log)</out_format>
+  </localfile>
+
+  <!-- ================================================================
+       S4 (OPSIONAL): ModSecurity audit log JSON.
+       Menutup FN1: body POST tidak terlihat di access log, sehingga
+       modul sqli, sqli_blind, xpath, stored_xss, ssrf_xspa, fileupload
+       tidak dapat mencapai tier T1 tanpa ini.
+       AKTIF. Mode WAJIB DetectionOnly (PRD 3.2: bukan IPS inline).
+       Bila ModSecurity memblokir request, skenario E4-E8 tidak dapat
+       direproduksi dan data eksperimen menjadi tidak valid.
+       Verifikasi mode: grep -r SecRuleEngine /etc/modsecurity/
+       ================================================================ -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/apache2/modsec_audit.json</location>
+    <out_format>$(timestamp) $(hostname) asiw-modsec: $(log)</out_format>
+  </localfile>
+
+  <!-- ================================================================
+       S5 (OPSIONAL): MariaDB server_audit.
+       AKTIF. Bukti terkuat untuk SQLi (rule 100401) dan satu-satunya
+       konfirmasi stored XSS (rule 100409).
+
+       DAMPAK YANG HARUS DICATAT: audit query menambah beban I/O dan
+       mencatat teks query penuh. Aktifkan SEBELUM mengambil baseline
+       E0/E1, supaya angka CPU/memori/EPS pada PRD 10.4 konsisten
+       antara baseline dan skenario serangan.
+       ================================================================ -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/mysql/server_audit.log</location>
+    <out_format>$(timestamp) $(hostname) asiw-dbaudit: $(log)</out_format>
+  </localfile>
+
+  <!-- ================================================================
+       S7: FIM pada aplikasi XVWA.
+
+       PEMISAHAN DIREKTORI YANG DISENGAJA (pengendali FP6 pada
+       XVWA_Detection_Mapping_ASIW.md):
+
+         (a) img/uploads  -> whodata + report_changes.
+             File eksekutabel baru di sini = bukti T3 (rule 100407).
+             Inilah direktori paling penting.
+
+         (b) img/         -> whodata.
+             SSRF menulis hasil unduhan ke /xvwa/img/<rand>img1.jpg
+             (rule 100431).
+
+         (c) vulnerabilities/ dan setup/ -> realtime saja.
+             Perubahan di sini WAJAR saat deploy atau reset lab, jadi
+             hanya menghasilkan alert FIM bawaan level 7, bukan T3.
+
+       whodata memerlukan auditd aktif dan memberi info proses/user
+       yang mengubah berkas. Bila auditd tidak dipakai di suatu VM,
+       ganti whodata="yes" menjadi realtime="yes" pada VM itu.
+       ================================================================ -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>300</frequency>
+    <skip_nfs>yes</skip_nfs>
+
+    <directories whodata="yes" report_changes="yes" check_all="yes"
+                 tags="asiw_xvwa_upload">/var/www/html/xvwa/img/uploads</directories>
+
+    <directories whodata="yes" check_all="yes"
+                 tags="asiw_xvwa_img">/var/www/html/xvwa/img</directories>
+
+    <directories realtime="yes" check_all="yes"
+                 tags="asiw_xvwa_code">/var/www/html/xvwa/vulnerabilities</directories>
+
+    <directories realtime="yes" check_all="yes"
+                 tags="asiw_xvwa_code">/var/www/html/xvwa/setup</directories>
+
+    <ignore type="sregex">\.tmp$|\.swp$|~$</ignore>
+  </syscheck>
+
+  <!-- ================================================================
+       S9: SCA kustom. Mengukur KONDISI rentan statis (XV-13, XV-17,
+       dan prasyarat telemetri), bukan peristiwa serangan.
+       Berkas policy ikut disinkronkan lewat grup ini, sehingga
+       path-nya ada di etc/shared/ pada agent.
+       ================================================================ -->
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>12h</interval>
+    <skip_nfs>yes</skip_nfs>
+    <policies>
+      <policy>etc/shared/asiw_xvwa_baseline.yml</policy>
+    </policies>
+  </sca>
+
+</agent_config>

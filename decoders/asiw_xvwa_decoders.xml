@@ -1,0 +1,106 @@
+<!--
+  ==================================================================
+  ASIW: Custom decoders deteksi serangan XVWA (VM Target)
+  Target versi: Wazuh 4.14.8
+  Pasang di Manager: /var/ossec/etc/decoders/asiw_xvwa_decoders.xml
+  ==================================================================
+
+  Sumber telemetri yang didekode (kode S mengikuti XVWA_Detection_Mapping_ASIW.md):
+
+    S2  asiw-xvwa-webjson : Apache access log format JSON (file log KEDUA),
+                            dikirim agent dengan <out_format> prefix program
+                            name "asiw-xvwa-web" (lihat agent/ossec.conf-target.xml).
+    S3  asiw-xvwa-errctx  : anak decoder apache-errorlog bawaan; mengambil
+                            nama modul XVWA + signature error PHP/SQL.
+    S4  asiw-xvwa-modsec  : ModSecurity audit log JSON (program "asiw-modsec").
+    S5  asiw-xvwa-dbaudit : MariaDB server_audit (program "asiw-dbaudit").
+    S7b asiw-xvwa-yara    : hasil YARA via active response (program "asiw-yara").
+
+  CATATAN PENTING (hasil uji wazuh-logtest 4.14.8):
+   - JSON_Decoder menghasilkan field dengan NAMA ASLI dari JSON
+     (mis. "uri", "status", "method"), BUKAN field statis Wazuh
+     (url/id/protocol). Karena itu rule memakai <field name="uri">, dst.
+   - Pola decoder yang dipakai: decoder induk dengan <program_name>,
+     lalu satu anak dengan <plugin_decoder offset="after_parent">.
+     Pola "prematch JSON + plugin_decoder" pada file kustom tidak dipakai
+     karena akan bertabrakan dengan decoder 'json' bawaan.
+-->
+
+<!-- ===================== S2: Apache access log JSON ===================== -->
+<decoder name="asiw-xvwa-webjson">
+  <program_name>asiw-xvwa-web</program_name>
+</decoder>
+
+<decoder name="asiw-xvwa-webjson">
+  <parent>asiw-xvwa-webjson</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- Pemetaan tambahan ke field statis Wazuh agar srcip tersedia untuk
+     <same_source_ip/> pada rule frekuensi (T2) dan untuk <srcip> suppression. -->
+<decoder name="asiw-xvwa-webjson">
+  <parent>asiw-xvwa-webjson</parent>
+  <regex>"remote_ip":"(\S+?)"</regex>
+  <order>srcip</order>
+</decoder>
+
+<!-- ===================== S3: Apache/PHP error log ======================
+     TIDAK ADA decoder kustom di sini, dan itu disengaja.
+
+     Alasan (hasil uji wazuh-logtest 4.14.8): decoder bawaan
+     'apache-errorlog-ip' sudah mencocokkan baris error Apache dan mengambil
+     srcip/srcport. Wazuh hanya menjalankan SATU decoder anak per induk, jadi
+     decoder anak tambahan di bawah 'apache-errorlog' tidak akan pernah
+     dieksekusi dan field kustomnya selalu kosong.
+
+     Konsekuensi desain: ekstraksi nama modul XVWA dan signature error
+     PHP/SQL dilakukan di LAYER RULE memakai <regex>, bukan di decoder.
+     Lihat rule 100110 dan 1003NN pada rules/asiw_xvwa_rules.xml.
+     srcip tetap tersedia dari decoder bawaan sehingga korelasi per-IP
+     dan <same_source_ip/> tetap berfungsi.
+-->
+
+<!-- ===================== S4: ModSecurity audit log JSON =================
+     ModSecurity 2.9+ dengan SecAuditLogFormat JSON. -->
+<decoder name="asiw-xvwa-modsec">
+  <program_name>asiw-modsec</program_name>
+</decoder>
+
+<decoder name="asiw-xvwa-modsec">
+  <parent>asiw-xvwa-modsec</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>
+
+<decoder name="asiw-xvwa-modsec">
+  <parent>asiw-xvwa-modsec</parent>
+  <regex>"client_ip":"(\S+?)"</regex>
+  <order>srcip</order>
+</decoder>
+
+<!-- ===================== S5: MariaDB server_audit =======================
+     Format server_audit default (CSV):
+       20261031 11:00:01,target-1,root,localhost,12,42,QUERY,xvwa,'<query>',0
+-->
+<decoder name="asiw-xvwa-dbaudit">
+  <program_name>asiw-dbaudit</program_name>
+</decoder>
+
+<decoder name="asiw-xvwa-dbaudit">
+  <parent>asiw-xvwa-dbaudit</parent>
+  <regex type="pcre2">^\d+ \d+:\d+:\d+,([^,]+),([^,]+),([^,]+),(\d+),(\d+),(\w+),(\w*),'(.*)',(\d+)$</regex>
+  <order>asiw_db_host,asiw_db_user,asiw_db_src,asiw_db_thread,asiw_db_qid,asiw_db_cmd,asiw_db_name,asiw_db_query,asiw_db_status</order>
+</decoder>
+
+<!-- ===================== S7b: YARA via Active Response ==================
+     Output skrip agent/yara/asiw-yara.sh (satu baris JSON):
+       {"file":"/var/www/html/xvwa/img/uploads/shell.php",
+        "matches":"Webshell_Generic_PHP","verdict":"malicious"}
+-->
+<decoder name="asiw-xvwa-yara">
+  <program_name>asiw-yara</program_name>
+</decoder>
+
+<decoder name="asiw-xvwa-yara">
+  <parent>asiw-xvwa-yara</parent>
+  <plugin_decoder offset="after_parent">JSON_Decoder</plugin_decoder>
+</decoder>

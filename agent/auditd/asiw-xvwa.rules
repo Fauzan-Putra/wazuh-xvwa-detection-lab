@@ -1,0 +1,67 @@
+## =====================================================================
+## ASIW S6: aturan auditd untuk bukti host (tier T3) pada VM Target XVWA
+## ---------------------------------------------------------------------
+## Pasang di VM Target:
+##   sudo cp asiw-xvwa.rules /etc/audit/rules.d/
+##   sudo augenrules --load
+##   sudo auditctl -l | grep asiw_web        # verifikasi
+##
+## PRASYARAT: paket auditd terpasang (Ubuntu: apt install auditd audispd-plugins)
+##
+## ---------------------------------------------------------------------
+## VERIFIKASI UID USER WEB SEBELUM DIPAKAI
+## ---------------------------------------------------------------------
+## Nilai 33 di bawah adalah UID 'www-data' pada Ubuntu/Debian. WAJIB
+## dicek pada setiap VM Target karena bisa berbeda:
+##
+##   id -u www-data
+##
+## Jika hasilnya bukan 33, ganti semua 'euid=33' di file ini.
+## Pada Ubuntu 22.04 dan 24.04 (VM Target ASIW) nilainya 33, tetapi tetap
+## catat hasil `id -u www-data` per VM sebagai bukti reproducibility.
+##
+## ---------------------------------------------------------------------
+## MENGAPA MEMFILTER euid, BUKAN MEMANTAU SEMUA execve
+## ---------------------------------------------------------------------
+## Memantau seluruh execve pada sistem menghasilkan ribuan event per menit
+## (cron, systemd, shell admin) dan akan membanjiri Manager. Filter euid
+## membatasi event HANYA pada proses yang dijalankan oleh user web, yaitu
+## tepat yang relevan untuk eksploitasi XVWA. Ini juga memisahkan aktivitas
+## admin yang sah (sesi SSH) dari aktivitas web (pengendali FP pada
+## XVWA_Detection_Mapping_ASIW.md bagian XV-03).
+## =====================================================================
+
+## --- Eksekusi proses oleh user web (bukti T3 untuk XV-03 command injection)
+## key=asiw_web_exec dipakai oleh rule 100403 dan 100404.
+-a always,exit -F arch=b64 -S execve -F euid=33 -k asiw_web_exec
+-a always,exit -F arch=b32 -S execve -F euid=33 -k asiw_web_exec
+
+## --- Koneksi keluar oleh user web (bukti T3 untuk XV-11 SSRF dan XV-12 RFI)
+## key=asiw_web_connect dipakai oleh rule 100411 dan 100412.
+## Catatan: 'connect' juga dipanggil untuk koneksi ke MariaDB lokal. Agar
+## tidak berisik, pertimbangkan menaikkan ambang di backend atau
+## menambahkan pengecualian berbasis port di layer normalisasi; auditd
+## sendiri tidak dapat memfilter alamat tujuan.
+-a always,exit -F arch=b64 -S connect -F euid=33 -k asiw_web_connect
+-a always,exit -F arch=b32 -S connect -F euid=33 -k asiw_web_connect
+
+## --- Penulisan file ke direktori upload oleh user web
+## Pelengkap FIM: FIM memberi tahu APA yang berubah, auditd memberi tahu
+## SIAPA/PROSES APA yang mengubahnya. Sesuaikan path bila document root
+## bukan /var/www/html.
+-w /var/www/html/xvwa/img/uploads -p wa -k asiw_web_upload
+
+## --- Perubahan pada direktori kode XVWA
+## Dipisahkan dari direktori upload (pengendali FP6 pada mapping):
+## perubahan kode saat deploy/reset itu wajar, file baru di upload tidak.
+-w /var/www/html/xvwa/vulnerabilities -p wa -k asiw_code_change
+
+## =====================================================================
+## CATATAN INTEGRASI DENGAN WAZUH
+## ---------------------------------------------------------------------
+## Wazuh TIDAK membaca /var/log/audit/audit.log secara default. Tambahkan
+## localfile pada ossec.conf agent (lihat agent/ossec.conf-target.xml).
+##
+## Alternatif resmi: gunakan audisp-plugin ke socket Wazuh. Untuk lab ini
+## pembacaan file audit.log lebih sederhana dan cukup.
+## =====================================================================

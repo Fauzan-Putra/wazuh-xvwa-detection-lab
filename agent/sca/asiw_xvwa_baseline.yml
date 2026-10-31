@@ -1,0 +1,234 @@
+# =====================================================================
+# ASIW S9: policy SCA kustom untuk baseline konfigurasi VM Target XVWA
+# ---------------------------------------------------------------------
+# PERAN DALAM SISTEM (penting agar tidak salah tafsir):
+#   Policy ini mengukur KONDISI RENTAN YANG STATIS, bukan peristiwa
+#   serangan. Hasilnya mengisi registri kerentanan aset
+#   (tabel asset_vulnerabilities, XVWA_Detection_Mapping_ASIW.md 7.3),
+#   BUKAN pipeline alert.
+#
+#   Ini menjawab langsung bagian 1.1 dokumen mapping: "Kerentanan bukan
+#   peristiwa". Sistem tidak boleh membuat alert "XVWA rentan SQLi";
+#   fakta itu direkam di sini sekali, lalu dipakai sebagai konteks
+#   pengaya ("serangan menargetkan modul yang diketahui rentan").
+#
+#   Policy ini juga menjawab XV-13 (Session Flaws) dan XV-17
+#   (Cryptography) yang pada dokumen mapping berkelas "S" (statis):
+#   keduanya TIDAK punya peristiwa eksploitasi yang dapat dibaca agent.
+#
+# PASANG di VM Target:
+#   sudo install -o root -g wazuh -m 640 asiw_xvwa_baseline.yml \
+#        /var/ossec/etc/shared/asiw_xvwa_baseline.yml
+#   lalu aktifkan blok <sca> pada ossec.conf (lihat agent/ossec.conf-target.xml)
+#   sudo systemctl restart wazuh-agent
+#
+# VERIFIKASI:
+#   Wazuh Dashboard > Agents > <target> > Security Configuration Assessment
+# =====================================================================
+
+policy:
+  id: "asiw_xvwa_baseline"
+  file: "asiw_xvwa_baseline.yml"
+  name: "ASIW - Baseline konfigurasi VM Target XVWA"
+  description: "Mengukur kondisi konfigurasi yang membuat XVWA rentan. Hasil dipakai sebagai registri kerentanan aset, bukan sebagai alert serangan."
+  references:
+    - https://github.com/s4n7h0/xvwa
+    - https://owasp.org/Top10/2025/
+
+requirements:
+  title: "Aplikasi XVWA terpasang pada endpoint"
+  description: "Pemeriksaan hanya relevan bila direktori aplikasi XVWA ada."
+  condition: all
+  rules:
+    - 'd:/var/www/html/xvwa'
+
+checks:
+  # -------------------------------------------------------------------
+  # Konfigurasi PHP yang membentuk permukaan serangan
+  # -------------------------------------------------------------------
+  - id: 10001
+    title: "PHP: allow_url_include dinonaktifkan"
+    description: "allow_url_include=On memungkinkan Remote File Inclusion (XV-12, RFI) pada parameter file modul fi."
+    rationale: "XVWA menyertakan php.ini lokal yang menyalakan allow_url_include. Ini adalah prasyarat RFI."
+    remediation: "Set allow_url_include=Off pada php.ini. CATATAN: pada lab ASIW kondisi ini SENGAJA dibiarkan On; temuan ini direkam sebagai kerentanan terdaftar (XV-12)."
+    compliance:
+      - asiw_xv_id: ["XV-12"]
+      - owasp_2025: ["A05"]
+    condition: none
+    rules:
+      - 'f:/var/www/html/xvwa/php.ini -> r:^allow_url_include\s*=\s*on'
+
+  - id: 10002
+    title: "PHP: allow_url_fopen dinonaktifkan"
+    description: "allow_url_fopen=On memungkinkan SSRF via file_get_contents (XV-11, parameter img_url)."
+    rationale: "Modul ssrf_xspa memakai file_get_contents($_POST['img_url']) tanpa validasi."
+    remediation: "Set allow_url_fopen=Off. Pada lab ASIW dibiarkan On; direkam sebagai XV-11."
+    compliance:
+      - asiw_xv_id: ["XV-11"]
+      - owasp_2025: ["A01"]
+    condition: none
+    rules:
+      - 'f:/var/www/html/xvwa/php.ini -> r:^allow_url_fopen\s*=\s*on'
+
+  - id: 10003
+    title: "PHP: display_errors dinonaktifkan"
+    description: "display_errors=On membocorkan pesan error SQL ke penyerang, mempermudah SQLi error-based (XV-01)."
+    rationale: "Modul sqli memanggil ini_set('display_errors',1) di level kode, sehingga pengaturan global tidak selalu cukup. Pemeriksaan ini menilai pengaturan global."
+    remediation: "Set display_errors=Off pada php.ini produksi. Pada lab dibiarkan On; direkam sebagai XV-01."
+    compliance:
+      - asiw_xv_id: ["XV-01"]
+      - owasp_2025: ["A05"]
+    condition: none
+    rules:
+      - 'c:php -r "echo ini_get(\"display_errors\");" -> r:^1$|^On$'
+
+  - id: 10004
+    title: "PHP: log_errors diaktifkan"
+    description: "log_errors harus On agar error aplikasi masuk ke error log dan tier T2 (rule 100301/100306/100312) dapat bekerja."
+    rationale: "Tanpa log_errors, error hanya tampil di browser penyerang dan tidak pernah terlihat SIEM. Ini sumber false negative pada tier T2."
+    remediation: "Set log_errors=On pada php.ini."
+    compliance:
+      - asiw_telemetry: ["S3"]
+    condition: all
+    rules:
+      - 'c:php -r "echo ini_get(\"log_errors\");" -> r:^1$|^On$'
+
+  # -------------------------------------------------------------------
+  # XV-13 Session Flaws (kelas S: statis, tidak ada peristiwa)
+  # -------------------------------------------------------------------
+  - id: 10010
+    title: "PHP: session.cookie_httponly diaktifkan"
+    description: "Tanpa HttpOnly, cookie sesi dapat dibaca JavaScript sehingga XSS dapat mencuri sesi (XV-13)."
+    rationale: "Pada dokumen mapping, XV-13 berkelas statis: deteksi peristiwa hampir tidak mungkin, jadi kondisi ini harus diukur di sini."
+    remediation: "Set session.cookie_httponly=1."
+    compliance:
+      - asiw_xv_id: ["XV-13"]
+      - owasp_2025: ["A07"]
+    condition: all
+    rules:
+      - 'c:php -r "echo ini_get(\"session.cookie_httponly\");" -> r:^1$|^On$'
+
+  - id: 10011
+    title: "PHP: session.use_strict_mode diaktifkan"
+    description: "use_strict_mode=1 mencegah session fixation dengan menolak ID sesi yang tidak dibuat server (XV-13)."
+    remediation: "Set session.use_strict_mode=1."
+    compliance:
+      - asiw_xv_id: ["XV-13"]
+      - owasp_2025: ["A07"]
+    condition: all
+    rules:
+      - 'c:php -r "echo ini_get(\"session.use_strict_mode\");" -> r:^1$'
+
+  - id: 10012
+    title: "PHP: session.cookie_secure diaktifkan"
+    description: "Tanpa Secure, cookie sesi dikirim melalui HTTP polos dan dapat disadap (XV-13)."
+    rationale: "Relevan bila VM Target disajikan via HTTPS. Bila lab memang HTTP (lihat Lampiran A5 dokumen mapping), catat sebagai batasan lab, bukan kegagalan konfigurasi."
+    remediation: "Aktifkan TLS lalu set session.cookie_secure=1."
+    compliance:
+      - asiw_xv_id: ["XV-13"]
+      - owasp_2025: ["A07"]
+    condition: all
+    rules:
+      - 'c:php -r "echo ini_get(\"session.cookie_secure\");" -> r:^1$|^On$'
+
+  # -------------------------------------------------------------------
+  # XV-07 Unrestricted File Upload: kondisi direktori upload
+  # -------------------------------------------------------------------
+  - id: 10020
+    title: "Direktori upload XVWA tidak boleh mengeksekusi PHP"
+    description: "Bila Apache mengeksekusi .php di /xvwa/img/uploads, webshell yang diunggah langsung berjalan (XV-07 eskalasi tertinggi)."
+    rationale: "Pengendali paling efektif untuk XV-07 bukan validasi upload, melainkan mematikan eksekusi di direktori upload."
+    remediation: "Tambahkan pada vhost: <Directory /var/www/html/xvwa/img/uploads> php_admin_flag engine off </Directory>. CATATAN: pada lab ASIW ini SENGAJA tidak diterapkan agar skenario E8 dapat direproduksi; direkam sebagai XV-07."
+    compliance:
+      - asiw_xv_id: ["XV-07"]
+      - owasp_2025: ["A06"]
+    condition: all
+    rules:
+      - 'd:/var/www/html/xvwa/img/uploads'
+      - 'c:grep -rl "php_admin_flag engine off" /etc/apache2 -> r:\.+'
+
+  - id: 10021
+    title: "Direktori upload XVWA ada dan dapat dipantau FIM"
+    description: "Memastikan path yang dipakai rule 100407 benar-benar ada pada endpoint ini."
+    rationale: "Bila path berbeda (document root lain), rule FIM T3 tidak akan pernah cocok. Ini pemeriksaan prasyarat deteksi, bukan kerentanan."
+    remediation: "Sesuaikan path pada rules/asiw_xvwa_rules.xml dan ossec.conf bila document root berbeda."
+    compliance:
+      - asiw_telemetry: ["S7"]
+    condition: all
+    rules:
+      - 'd:/var/www/html/xvwa/img/uploads'
+
+  # -------------------------------------------------------------------
+  # XV-17 Cryptography (kelas S murni)
+  # -------------------------------------------------------------------
+  - id: 10030
+    title: "XVWA: kredensial di-hash dengan MD5 tanpa salt"
+    description: "setup/home.php menyimpan password sebagai md5() tanpa salt, dan login.php memverifikasi dengan md5(). Ini kelemahan kriptografi statis (XV-17)."
+    rationale: "Tidak ada peristiwa jaringan atau host yang menandakan eksploitasi kelemahan ini; satu-satunya cara merekamnya adalah pemeriksaan statis."
+    remediation: "Gunakan password_hash()/password_verify(). Pada lab dibiarkan; direkam sebagai XV-17."
+    compliance:
+      - asiw_xv_id: ["XV-17"]
+      - owasp_2025: ["A04"]
+    condition: none
+    rules:
+      - 'f:/var/www/html/xvwa/login.php -> r:md5\(\$_POST'
+
+  - id: 10031
+    title: "XVWA: kunci enkripsi tertanam di kode sumber"
+    description: "Modul crypto memuat kunci AES hard-coded pada home.php (XV-17)."
+    remediation: "Pindahkan kunci ke environment/secret store. Pada lab dibiarkan; direkam sebagai XV-17."
+    compliance:
+      - asiw_xv_id: ["XV-17"]
+      - owasp_2025: ["A04"]
+    condition: none
+    rules:
+      - 'f:/var/www/html/xvwa/vulnerabilities/crypto/home.php -> r:pack\(.H\*'
+
+  # -------------------------------------------------------------------
+  # Kredensial database
+  # -------------------------------------------------------------------
+  - id: 10040
+    title: "XVWA: koneksi database tidak memakai user root tanpa password"
+    description: "config.php memakai user 'root' dengan password kosong. Jika SQLi berhasil, penyerang mendapat hak penuh DB (dampak maksimal)."
+    rationale: "Ini memperbesar dampak XV-01/XV-02 dari pembacaan data menjadi penguasaan server DB (into outfile, load_file)."
+    remediation: "Buat user khusus dengan hak minimum (SELECT/INSERT pada db xvwa saja) dan password kuat. CATATAN: menurunkan dampak tanpa menghilangkan kerentanan SQLi, jadi skenario E4 tetap dapat dijalankan."
+    compliance:
+      - asiw_xv_id: ["XV-01", "XV-02"]
+      - owasp_2025: ["A05"]
+    condition: none
+    rules:
+      - 'f:/var/www/html/xvwa/config.php -> r:\$user\s*=\s*"root"'
+
+  # -------------------------------------------------------------------
+  # Prasyarat telemetri (bukan kerentanan: kesiapan deteksi)
+  # -------------------------------------------------------------------
+  - id: 10050
+    title: "Telemetri: access log JSON XVWA tersedia"
+    description: "Prasyarat seluruh rule T1 (S2). Tanpa file ini, rule 1002NN tidak akan pernah cocok."
+    remediation: "Pasang agent/apache/asiw-xvwa-json-log.conf lalu reload Apache."
+    compliance:
+      - asiw_telemetry: ["S2"]
+    condition: all
+    rules:
+      - 'f:/var/log/apache2/xvwa_access_json.log'
+
+  - id: 10051
+    title: "Telemetri: auditd aktif dengan key ASIW"
+    description: "Prasyarat tier T3 untuk XV-03 dan XV-11 (S6)."
+    remediation: "Pasang agent/auditd/asiw-xvwa.rules lalu jalankan augenrules --load."
+    compliance:
+      - asiw_telemetry: ["S6"]
+    condition: all
+    rules:
+      - 'c:auditctl -l -> r:asiw_web_exec'
+
+  - id: 10052
+    title: "Telemetri: waktu tersinkronisasi (NTP/chrony aktif)"
+    description: "Korelasi lintas sumber (rule 1005NN) dan pencocokan ground truth gagal bila jam antar-VM melenceng (FN6 pada dokumen mapping)."
+    remediation: "Aktifkan chrony atau systemd-timesyncd dan set zona waktu UTC."
+    compliance:
+      - asiw_telemetry: ["global"]
+    condition: any
+    rules:
+      - 'c:timedatectl show -p NTPSynchronized --value -> r:^yes$'
+      - 'c:chronyc tracking -> r:Leap status\s*:\s*Normal'
