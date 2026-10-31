@@ -115,13 +115,29 @@ mkdir -p "$OSSEC/etc/shared/$GROUP"
 
 # ---------------------------------------------------------------- 5
 blue "5/8 Memasang agent.conf terpusat (deployment: ${DEPLOY})"
-install -o wazuh -g wazuh -m 660 "$SRC/manager/agent.conf-asiw-xvwa" \
-        "$OSSEC/etc/shared/$GROUP/agent.conf"
-# Berkas di direktori grup ikut disinkronkan ke etc/shared/ pada agent.
-install -o wazuh -g wazuh -m 660 "$SRC/agent/sca/asiw_xvwa_baseline.yml" \
-        "$OSSEC/etc/shared/$GROUP/"
-green "    etc/shared/$GROUP/agent.conf"
+# Pakai berkas sesuai deployment ($AGENT_CONF/$SCA_FILE dari blok pemilihan).
+# BUG HISTORIS: versi lama meng-copy path native hardcoded di sini, sehingga
+# ASIW_DEPLOYMENT=docker diabaikan dan agent.conf native selalu tersaji.
+[ -f "$AGENT_CONF" ] || { red "    Berkas sumber tidak ada: $AGENT_CONF"; exit 1; }
+[ -f "$SCA_FILE" ]   || { red "    Berkas sumber tidak ada: $SCA_FILE"; exit 1; }
+
+install -o wazuh -g wazuh -m 660 "$AGENT_CONF" "$OSSEC/etc/shared/$GROUP/agent.conf" \
+  || { red "    GAGAL menyalin agent.conf"; exit 1; }
+# SCA selalu disalin dengan nama tetap asiw_xvwa_baseline.yml (dirujuk agent.conf).
+install -o wazuh -g wazuh -m 660 "$SCA_FILE" \
+        "$OSSEC/etc/shared/$GROUP/asiw_xvwa_baseline.yml" \
+  || { red "    GAGAL menyalin policy SCA"; exit 1; }
+
+# VERIFIKASI: berkas yang BENAR-BENAR tersaji harus cocok deployment terpilih.
+if [ "$DEPLOY" = "docker" ]; then SENTINEL="/root/xvwa-lab/logs"; else SENTINEL="/var/log/apache2"; fi
+if ! grep -q "$SENTINEL" "$OSSEC/etc/shared/$GROUP/agent.conf"; then
+  red "    GAGAL verifikasi: agent.conf tersaji tidak cocok deployment '$DEPLOY'"
+  red "    (penanda '$SENTINEL' tidak ditemukan). Periksa $AGENT_CONF."
+  exit 1
+fi
+green "    etc/shared/$GROUP/agent.conf  (dari $(basename "$AGENT_CONF"))"
 green "    etc/shared/$GROUP/asiw_xvwa_baseline.yml"
+green "    deployment '$DEPLOY' terverifikasi (penanda '$SENTINEL' ada)"
 
 if [ -x "$OSSEC/bin/verify-agent-conf" ]; then
   if "$OSSEC/bin/verify-agent-conf" -f "$OSSEC/etc/shared/$GROUP/agent.conf" >/dev/null 2>&1; then
