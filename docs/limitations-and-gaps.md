@@ -267,3 +267,37 @@ rule 100403) TIDAK terpengaruh dan terbukti bekerja dengan baik di container.
 **Cara mengaktifkan kembali** (mis. XVWA native dengan DB lokal yang di-allowlist):
 buka komentar dua baris `connect` lalu saring koneksi ke IP DB di layer
 normalisasi n8n/backend.
+
+### T-8 (TINGGI, diperbaiki) - log JSON tidak terisi; pivot ke access.log combined
+
+**Gejala (lapangan, 31 Okt 2026).** Tidak ada satu pun alert web T1 (100201 SQLi,
+100208 XSS, 100212 LFI) muncul, padahal serangan jelas sampai ke XVWA.
+
+**Sebab.** `/var/log/apache2/xvwa_access_json.log` berukuran 0 byte — Apache
+tidak menulis ke sana. CustomLog JSON dipasang di `conf-enabled` (konteks
+server global), sedangkan XVWA disajikan oleh VirtualHost yang SUDAH memiliki
+`CustomLog ... combined` sendiri. Apache tidak mewarisi CustomLog server-level
+ke VirtualHost yang sudah punya direktif log sendiri. Jadi `access.log` combined
+terisi, `xvwa_access_json.log` tidak.
+
+Penting: ini **bukan khusus Docker**. XVWA native pun berjalan di bawah
+VirtualHost dengan CustomLog sendiri, jadi pendekatan log JSON akan sama-sama
+gagal. Pendekatan itu hanya "berhasil" pada uji wazuh-logtest terisolasi karena
+di sana tidak ada VirtualHost.
+
+**Perbaikan.** Seluruh rule T1 dialihkan dari log JSON terpisah ke `access.log`
+combined yang selalu terisi dan sudah dibaca agent:
+ - rule konteks 100100 kini turun dari rule bawaan `31100,31108` (grup web-log),
+ - rule T1 memakai static field `<url>` dan `<protocol>` (diisi decoder bawaan
+   web-accesslog), bukan `<field name="uri">`/`<field name="method">`,
+ - korpus uji diubah ke format NCSA combined.
+
+Konsekuensi: tidak perlu menyuntik konfigurasi Apache ke dalam container, dan
+deteksi T1 bekerja untuk deployment native maupun Docker dengan telemetri yang
+sama (S1). Log JSON opsional dibiarkan (kosong) untuk kemungkinan pemakaian
+field tambahan oleh backend bila nanti CustomLog-nya dipindah ke dalam vhost.
+
+**Catatan static field (Wazuh 4.14.8).** `url`, `protocol`, `id`, `srcip` adalah
+field statis; harus dicocokkan dengan elemen sendiri (`<url>`, `<protocol>`),
+bukan `<field name="...">`. Memakai `<field name="url">` menyebabkan analysisd
+menolak: "Field 'url' is static".

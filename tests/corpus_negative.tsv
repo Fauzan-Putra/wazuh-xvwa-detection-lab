@@ -3,41 +3,41 @@
 # Ini merepresentasikan aktivitas normal E0/E1 (browsing sah seluruh modul).
 #
 # ---------- Penelusuran sah tiap modul (tidak boleh jadi alert serangan) ----------
-0	Oct 31 10:00:01 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/","status":"200","resp_bytes":"8000","duration_us":"9000"}
-0	Oct 31 10:00:02 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/sqli/","status":"200","resp_bytes":"7000","duration_us":"12000"}
-0	Oct 31 10:00:03 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"POST","uri":"/xvwa/vulnerabilities/sqli/","status":"200","resp_bytes":"7400","duration_us":"13000"}
-0	Oct 31 10:00:04 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/sqli_blind/","status":"200","resp_bytes":"7000","duration_us":"12000"}
-0	Oct 31 10:00:05 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=127.0.0.1","status":"200","resp_bytes":"4100","duration_us":"3050000"}
-0	Oct 31 10:00:06 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=google.com","status":"200","resp_bytes":"4100","duration_us":"3050000"}
-0	Oct 31 10:00:07 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/xpath/","status":"200","resp_bytes":"3000","duration_us":"9000"}
-0	Oct 31 10:00:08 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/formula_injection/","status":"200","resp_bytes":"5000","duration_us":"15000"}
-0	Oct 31 10:00:09 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/php_object_injection/?r=a%3A2%3A%7Bi%3A0%3Bs%3A4%3A%22XVWA%22%3Bi%3A1%3Bs%3A33%3A%22Xtreme%20Vulnerable%20Web%20Application%22%3B%7D","status":"200","resp_bytes":"2100","duration_us":"8000"}
-0	Oct 31 10:00:10 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=hello%20world","status":"200","resp_bytes":"3000","duration_us":"6000"}
-0	Oct 31 10:00:11 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=a%20%3C%20b","status":"200","resp_bytes":"3000","duration_us":"6000"}
-0	Oct 31 10:00:12 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/dom_xss/?default=English","status":"200","resp_bytes":"3200","duration_us":"5500"}
-0	Oct 31 10:00:13 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"POST","uri":"/xvwa/vulnerabilities/ssrf_xspa/?img_url=https%3A%2F%2Fexample.com%2Fcoffee.jpg","status":"200","resp_bytes":"1500","duration_us":"400000"}
-0	Oct 31 10:00:14 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/fi/?file=readme.txt","status":"200","resp_bytes":"2500","duration_us":"7000"}
-0	Oct 31 10:00:15 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/idor/?item=3","status":"200","resp_bytes":"2600","duration_us":"11000"}
-0	Oct 31 10:00:16 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/missfunc/?item=3&action=view","status":"200","resp_bytes":"2600","duration_us":"11000"}
-0	Oct 31 10:00:17 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/crypto/?item=secret","status":"200","resp_bytes":"4000","duration_us":"13000"}
-0	Oct 31 10:00:18 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/sessionflaws/","status":"200","resp_bytes":"2000","duration_us":"6000"}
-0	Oct 31 10:00:19 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/ssti/?name=Fauzan&submit=Enter","status":"200","resp_bytes":"2600","duration_us":"9000"}
-0	Oct 31 10:00:20 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/instruction.php","status":"200","resp_bytes":"4200","duration_us":"8000"}
-0	Oct 31 10:00:21 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/css/bootstrap.min.css","status":"200","resp_bytes":"120000","duration_us":"20000"}
-0	Oct 31 10:00:22 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/img/XVWA0987.png","status":"200","resp_bytes":"30000","duration_us":"9000"}
-0	Oct 31 10:00:23 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"POST","uri":"/xvwa/login.php","status":"302","resp_bytes":"0","duration_us":"25000"}
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/ HTTP/1.1" 200 8000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/sqli/ HTTP/1.1" 200 7000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "POST /xvwa/vulnerabilities/sqli/ HTTP/1.1" 200 7400 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/sqli_blind/ HTTP/1.1" 200 7000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/cmdi/?target=127.0.0.1 HTTP/1.1" 200 4100 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/cmdi/?target=google.com HTTP/1.1" 200 4100 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/xpath/ HTTP/1.1" 200 3000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/formula_injection/ HTTP/1.1" 200 5000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/php_object_injection/?r=a%3A2%3A%7Bi%3A0%3Bs%3A4%3A%22XVWA%22%3Bi%3A1%3Bs%3A33%3A%22Xtreme%20Vulnerable%20Web%20Application%22%3B%7D HTTP/1.1" 200 2100 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/reflected_xss/?item=hello%20world HTTP/1.1" 200 3000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/reflected_xss/?item=a%20%3C%20b HTTP/1.1" 200 3000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/dom_xss/?default=English HTTP/1.1" 200 3200 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "POST /xvwa/vulnerabilities/ssrf_xspa/?img_url=https%3A%2F%2Fexample.com%2Fcoffee.jpg HTTP/1.1" 200 1500 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/fi/?file=readme.txt HTTP/1.1" 200 2500 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/idor/?item=3 HTTP/1.1" 200 2600 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/missfunc/?item=3&action=view HTTP/1.1" 200 2600 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/crypto/?item=secret HTTP/1.1" 200 4000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/sessionflaws/ HTTP/1.1" 200 2000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/ssti/?name=Fauzan&submit=Enter HTTP/1.1" 200 2600 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/instruction.php HTTP/1.1" 200 4200 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/css/bootstrap.min.css HTTP/1.1" 200 120000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/img/XVWA0987.png HTTP/1.1" 200 30000 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "POST /xvwa/login.php HTTP/1.1" 302 0 "-" "curl/8.0"
 #
 # ---------- Nama sah dengan apostrof (FP1 pada mapping) ----------
-0	Oct 31 10:00:24 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/sqli/?search=O%27Brien","status":"200","resp_bytes":"5000","duration_us":"12000"}
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/sqli/?search=O%27Brien HTTP/1.1" 200 5000 "-" "curl/8.0"
 #
 # ---------- Nilai negatif pada modul formula (bukan formula injection) ----------
-0	Oct 31 10:00:25 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"POST","uri":"/xvwa/vulnerabilities/formula_injection/export.php?price=-5","status":"200","resp_bytes":"800","duration_us":"7000"}
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "POST /xvwa/vulnerabilities/formula_injection/export.php?price=-5 HTTP/1.1" 200 800 "-" "curl/8.0"
 #
 # ---------- Redirect ke domain sah yang memang disediakan UI XVWA ----------
-0	Oct 31 10:00:26 asiw-target-1 asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/redirect/redirect.php?forward=http%3A%2F%2Fwww.webappsec.org%2F","status":"302","resp_bytes":"0","duration_us":"2000"}
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/redirect/redirect.php?forward=http%3A%2F%2Fwww.webappsec.org%2F HTTP/1.1" 302 0 "-" "curl/8.0"
 #
 # ---------- Health check VM Monitoring (suppression 100901) ----------
-0	Oct 31 10:00:27 asiw-target-1 asiw-xvwa-web: {"remote_ip":"192.0.2.148","method":"GET","uri":"/xvwa/","status":"200","resp_bytes":"8000","duration_us":"9000"}
+0	192.0.2.148 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/ HTTP/1.1" 200 8000 "-" "curl/8.0"
 #
 # ---------- Perilaku baseline sah modul cmdi: ping dieksekusi aplikasi ----------
 0	type=SYSCALL msg=audit(1793000100.380:601): arch=c000003e syscall=59 success=yes exit=0 a0=55a1 a1=55a2 a2=55a3 a3=0 items=2 ppid=1000 pid=2001 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 tty=(none) ses=4294967295 comm="ping" exe="/usr/bin/ping" key="asiw_web_exec"
@@ -59,9 +59,9 @@
 0	Oct 31 10:00:41 asiw-target-1 asiw-yara: {"file":"/var/www/html/other/app.php","matches":"Webshell_Generic_PHP","verdict":"malicious"}
 #
 # ---------- Regresi FP setelah pelebaran pola anti-evasion ----------
-0	Oct 31 15:10:01 t asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=host.example.net","status":"200"}
-0	Oct 31 15:10:02 t asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/cmdi/?target=my-host-01.local","status":"200"}
-0	Oct 31 15:10:03 t asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"POST","uri":"/xvwa/vulnerabilities/xpath/?search=3&submit=Search","status":"200"}
-0	Oct 31 15:10:04 t asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/ssti/?name=Fauzan%20Ryuuken&submit=Enter","status":"200"}
-0	Oct 31 15:10:05 t asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"GET","uri":"/xvwa/vulnerabilities/reflected_xss/?item=Halaman%20normal%20tanpa%20tag","status":"200"}
-0	Oct 31 15:10:06 t asiw-xvwa-web: {"remote_ip":"203.0.113.10","method":"POST","uri":"/xvwa/vulnerabilities/sqli/?search=Cafe%20au%20lait","status":"200"}
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/cmdi/?target=host.example.net HTTP/1.1" 200 1234 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/cmdi/?target=my-host-01.local HTTP/1.1" 200 1234 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "POST /xvwa/vulnerabilities/xpath/?search=3&submit=Search HTTP/1.1" 200 1234 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/ssti/?name=Fauzan%20Ryuuken&submit=Enter HTTP/1.1" 200 1234 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "GET /xvwa/vulnerabilities/reflected_xss/?item=Halaman%20normal%20tanpa%20tag HTTP/1.1" 200 1234 "-" "curl/8.0"
+0	203.0.113.10 - - [31/Oct/2026:10:00:00 +0000] "POST /xvwa/vulnerabilities/sqli/?search=Cafe%20au%20lait HTTP/1.1" 200 1234 "-" "curl/8.0"
