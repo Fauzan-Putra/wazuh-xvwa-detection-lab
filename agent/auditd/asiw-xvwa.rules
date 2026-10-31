@@ -36,14 +36,27 @@
 -a always,exit -F arch=b64 -S execve -F euid=33 -k asiw_web_exec
 -a always,exit -F arch=b32 -S execve -F euid=33 -k asiw_web_exec
 
-## --- Koneksi keluar oleh user web (bukti T3 untuk XV-11 SSRF dan XV-12 RFI)
-## key=asiw_web_connect dipakai oleh rule 100411 dan 100412.
-## Catatan: 'connect' juga dipanggil untuk koneksi ke MariaDB lokal. Agar
-## tidak berisik, pertimbangkan menaikkan ambang di backend atau
-## menambahkan pengecualian berbasis port di layer normalisasi; auditd
-## sendiri tidak dapat memfilter alamat tujuan.
--a always,exit -F arch=b64 -S connect -F euid=33 -k asiw_web_connect
--a always,exit -F arch=b32 -S connect -F euid=33 -k asiw_web_connect
+## --- Koneksi keluar oleh user web (bukti T3 untuk XV-11 SSRF / XV-12 RFI)
+## DINONAKTIFKAN secara default.
+##
+## ALASAN (terbukti di lapangan pada setup Docker multi-container):
+## syscall 'connect' dipanggil pada SETIAP koneksi ke database. Pada lab
+## XVWA dengan container web + container MariaDB terpisah, setiap hit
+## halaman membuat web menyambung ke DB, sehingga aturan ini membanjiri
+## Manager dengan alert 100411 CRITICAL untuk aktivitas yang sepenuhnya
+## normal. auditd tidak dapat memfilter berdasarkan alamat/port tujuan di
+## level aturan, jadi tidak ada cara memisahkan koneksi web->DB yang sah
+## dari koneksi SSRF yang jahat di sini.
+##
+## Dampak: konfirmasi T3 berbasis host untuk SSRF/RFI (rule 100411) tidak
+## aktif. SSRF/RFI tetap terdeteksi lewat T1 (100211/100212) dan T2
+## (100311/100313) berbasis pola request. Ini trade-off yang disengaja.
+##
+## Untuk MENGAKTIFKAN KEMBALI (mis. pada XVWA native dengan DB di host
+## lokal yang di-allowlist), buka komentar dua baris di bawah lalu saring
+## koneksi ke IP DB di layer normalisasi (n8n/backend).
+# -a always,exit -F arch=b64 -S connect -F euid=33 -k asiw_web_connect
+# -a always,exit -F arch=b32 -S connect -F euid=33 -k asiw_web_connect
 
 ## --- Penulisan file ke direktori upload oleh user web
 ## Pelengkap FIM: FIM memberi tahu APA yang berubah, auditd memberi tahu

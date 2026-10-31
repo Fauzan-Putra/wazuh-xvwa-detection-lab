@@ -244,3 +244,26 @@ Rule berbasis FIM (**100407**, **100431**) dan rule frekuensi/korelasi
 karena alasan pada Bagian 2 (U1–U3). Yang terverifikasi adalah sintaksnya valid
 dan ruleset dimuat tanpa error. **Verifikasi fungsionalnya wajib dilakukan di
 lingkungan nyata** memakai prosedur pada Bagian 2 sebelum fase D dimulai.
+
+
+### T-7 (SEDANG, diperbaiki) - pemantauan `connect` auditd membanjiri alert
+
+**Gejala (lapangan, 31 Okt 2026, setup Docker multi-container).** Rule 100411
+("Web process initiated an outbound connection") menyala berulang CRITICAL pada
+aktivitas normal.
+
+**Sebab.** Aturan auditd `-S connect -F euid=33` menangkap SETIAP koneksi oleh
+user web, termasuk koneksi web->MariaDB yang terjadi pada setiap hit halaman.
+Pada XVWA dengan container web + DB terpisah, ini berarti banjir alert untuk
+aktivitas yang sepenuhnya sah. auditd tidak dapat memfilter berdasarkan alamat
+tujuan di level aturan. (Risiko R1 pada Bagian 5 memang sudah memprediksi ini.)
+
+**Perbaikan.** Pemantauan `connect` dinonaktifkan di `agent/auditd/asiw-xvwa.rules`
+(dua baris `-S connect` dikomentari). Konfirmasi T3 berbasis host untuk SSRF/RFI
+(rule 100411) menjadi tidak aktif; SSRF/RFI tetap terdeteksi lewat T1 (100211/
+100212) dan T2 (100311/100313). Pemantauan `execve` (bukti T3 command injection,
+rule 100403) TIDAK terpengaruh dan terbukti bekerja dengan baik di container.
+
+**Cara mengaktifkan kembali** (mis. XVWA native dengan DB lokal yang di-allowlist):
+buka komentar dua baris `connect` lalu saring koneksi ke IP DB di layer
+normalisasi n8n/backend.
